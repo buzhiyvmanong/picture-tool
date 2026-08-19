@@ -527,7 +527,7 @@ public sealed class ScrollCaptureService
         public CaptureStepResult CaptureManualStep(bool createPreview = true)
         {
             ThrowIfFinished();
-            return CaptureCurrentForAuto(createPreview);
+            return CaptureCurrent(createPreview, useControlledScrollMatching: true, countUnmatchedStep: true);
         }
 
         public CaptureStepResult ScrollAndCapture(int wheelDelta, DrawingPoint? scrollPoint = null, bool createPreview = true)

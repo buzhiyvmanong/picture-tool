@@ -46,6 +46,12 @@ public partial class CaptureOverlayWindow : Window
     private const int AutoScrollMaxRetryCount = 5;
     private const int ManualCaptureSettleMs = 80;
     private const int ManualWheelDebounceMs = 420;
+    private const int ManualWheelRapidWindowMs = 700;
+    private const int ManualWheelRapidThreshold = 2;
+    private const string ManualScrollTooFastWarning =
+        "滚动速度过快，请重新回到截图位置，缓慢滑动";
+    private const string ManualScrollBusyWarning =
+        "正在拼接上一屏，请稍候再滚动";
     private const int GwlExStyle = -20;
     private const long WsExTransparent = 0x00000020L;
     private const int WmNchitTest = 0x0084;
@@ -80,6 +86,9 @@ public partial class CaptureOverlayWindow : Window
     private GlobalWheelHook? _globalWheelHook;
     private HwndSource? _hwndSource;
     private CancellationTokenSource? _manualWheelDebounce;
+    private int _manualWheelEventsInWindow;
+    private long _manualWheelWindowStartTick;
+    private bool _scrollWarningActive;
     private CancellationTokenSource? _autoScrollCancellation;
     private DrawingRectangle _scrollRegion;
     private CaptureMode _captureMode = CaptureMode.Screenshot;
@@ -829,20 +838,27 @@ public partial class CaptureOverlayWindow : Window
             return;
         }
 
-        ScrollWarningText.MaxWidth = Math.Max(180, Math.Min(420, _selection.Width - 24));
+        ScrollWarningText.MaxWidth = Math.Max(220, Math.Min(480, RootCanvas.Width - 16));
         ScrollWarningText.UpdateLayout();
 
-        var x = _selection.Left + 12;
-        x = Math.Clamp(x, 8, Math.Max(8, RootCanvas.Width - ScrollWarningText.ActualWidth - 8));
+        var width = Math.Max(220, ScrollWarningText.ActualWidth);
+        var x = _selection.Left + (_selection.Width - width) / 2;
+        x = Math.Clamp(x, 8, Math.Max(8, RootCanvas.Width - width - 8));
 
-        var y = _selection.Top + 12;
-        if (y + ScrollWarningText.ActualHeight > _selection.Bottom - 8)
+        var y = _selection.Top - ScrollWarningText.ActualHeight - 10;
+        if (y < 8)
         {
-            y = Math.Max(8, _selection.Bottom - ScrollWarningText.ActualHeight - 12);
+            y = Math.Min(_selection.Bottom - ScrollWarningText.ActualHeight - 10, _selection.Top + 12);
+        }
+
+        if (y + ScrollWarningText.ActualHeight > RootCanvas.Height - 8)
+        {
+            y = Math.Max(8, RootCanvas.Height - ScrollWarningText.ActualHeight - 8);
         }
 
         Canvas.SetLeft(ScrollWarningText, x);
         Canvas.SetTop(ScrollWarningText, y);
+        System.Windows.Controls.Panel.SetZIndex(ScrollWarningText, 2000);
     }
 
     private void PositionModeBar()
@@ -1058,13 +1074,15 @@ public partial class CaptureOverlayWindow : Window
 
         DisableScrollPassThrough();
         SetOverlayExcludedFromCapture(false);
+        _manualWheelEventsInWindow = 0;
+        _scrollWarningActive = false;
     }
 
     private void OnGlobalWheelScrolled(int wheelDelta, DrawingPoint screenPoint)
     {
         Dispatcher.BeginInvoke(() =>
         {
-            if (!_isScrollSessionActive || _scrollSession is null || _isScrollBusy || wheelDelta == 0)
+            if (!_isScrollSessionActive || _scrollSession is null || wheelDelta == 0)
             {
                 return;
             }
@@ -1084,6 +1102,14 @@ public partial class CaptureOverlayWindow : Window
                 return;
             }
 
+            if (_isScrollBusy)
+            {
+                ShowManualScrollWarning(ManualScrollBusyWarning, "正在拼接，请稍候");
+                return;
+            }
+
+            TrackManualWheelPace();
+
             _manualWheelDebounce?.Cancel();
             _manualWheelDebounce = new CancellationTokenSource();
             var token = _manualWheelDebounce.Token;
@@ -1100,7 +1126,23 @@ public partial class CaptureOverlayWindow : Window
         }
         catch (OperationCanceledException)
         {
-            // Ignore debounce restarts while the user keeps scrolling.
+            ShowManualScrollWarning(ManualScrollTooFastWarning, "滚动过快，请放慢");
+        }
+    }
+
+    private void TrackManualWheelPace()
+    {
+        var now = Environment.TickCount64;
+        if (now - _manualWheelWindowStartTick > ManualWheelRapidWindowMs)
+        {
+            _manualWheelEventsInWindow = 0;
+            _manualWheelWindowStartTick = now;
+        }
+
+        _manualWheelEventsInWindow++;
+        if (_manualWheelEventsInWindow >= ManualWheelRapidThreshold)
+        {
+            ShowManualScrollWarning(ManualScrollTooFastWarning, "滚动过快，请放慢");
         }
     }
 
@@ -1118,7 +1160,6 @@ public partial class CaptureOverlayWindow : Window
         }
 
         SetScrollBusy(true, "截取中...");
-        HideScrollWarning();
 
         try
         {
@@ -1182,8 +1223,6 @@ public partial class CaptureOverlayWindow : Window
     private async Task<ScrollCaptureService.CaptureStepResult> RetryManualContinuityAsync(
         ScrollCaptureService.CaptureSession session)
     {
-        HideScrollWarning();
-
         for (var attempt = 0; attempt < AutoScrollMaxRetryCount; attempt++)
         {
             await Task.Delay(AutoScrollRetryDelayMs);
@@ -1196,7 +1235,7 @@ public partial class CaptureOverlayWindow : Window
             }
         }
 
-        return ScrollCaptureService.CaptureStepResult.Indeterminate(session.FrameCount);
+        return ScrollCaptureService.CaptureStepResult.Discontinuous(session.FrameCount);
     }
 
     private async Task RunAutoScrollCaptureAsync()
@@ -1445,14 +1484,29 @@ public partial class CaptureOverlayWindow : Window
     private void SetScrollBusy(bool busy, string? text = null)
     {
         _isScrollBusy = busy;
-        AutoScrollButton.Content = text ?? "自动滚动";
+        if (text is not null)
+        {
+            AutoScrollButton.Content = text;
+        }
+        else if (!busy && !_scrollWarningActive)
+        {
+            UpdateScrollControls();
+        }
+
         UpdateScrollButtonStates();
         PositionScrollToolbar();
     }
 
     private void UpdateScrollToolbarText()
     {
-        UpdateScrollControls();
+        if (!_scrollWarningActive)
+        {
+            UpdateScrollControls();
+        }
+        else
+        {
+            PositionScrollToolbar();
+        }
     }
 
     private void UpdateScrollControls(string? startText = null)
@@ -1517,22 +1571,18 @@ public partial class CaptureOverlayWindow : Window
                     UpdateScrollPreview(result.PreviewPath);
                 }
 
+                _manualWheelEventsInWindow = 0;
                 HideScrollWarning();
-                UpdateScrollToolbarText();
+                UpdateScrollControls();
                 break;
             case ScrollCaptureService.CaptureStepStatus.Unchanged:
-                HideScrollWarning();
-                AutoScrollButton.Content = "没有检测到新内容";
-                PositionScrollToolbar();
+                ShowManualScrollWarning(ManualScrollTooFastWarning, "没有检测到新内容");
                 break;
             case ScrollCaptureService.CaptureStepStatus.Indeterminate:
-                HideScrollWarning();
-                AutoScrollButton.Content = "继续检测中";
-                PositionScrollToolbar();
+                ShowManualScrollWarning(ManualScrollTooFastWarning, "滚动过快，请放慢");
                 break;
             case ScrollCaptureService.CaptureStepStatus.Discontinuous:
-                ShowScrollWarning("滚动速度过快，请重新回到截图位置，缓慢滑动");
-                UpdateScrollToolbarText();
+                ShowManualScrollWarning(ManualScrollTooFastWarning, "滚动不连贯，请回退");
                 break;
         }
     }
@@ -1562,15 +1612,25 @@ public partial class CaptureOverlayWindow : Window
         PositionScrollPreview();
     }
 
+    private void ShowManualScrollWarning(string bannerMessage, string toolbarMessage)
+    {
+        _scrollWarningActive = true;
+        ScrollWarningText.Text = bannerMessage;
+        ScrollWarningText.Visibility = Visibility.Visible;
+        AutoScrollButton.Content = toolbarMessage;
+        PositionScrollWarning();
+        PositionScrollToolbar();
+        System.Windows.Controls.Panel.SetZIndex(ScrollToolbar, 1999);
+    }
+
     private void ShowScrollWarning(string message)
     {
-        ScrollWarningText.Text = message;
-        ScrollWarningText.Visibility = Visibility.Visible;
-        PositionScrollWarning();
+        ShowManualScrollWarning(message, message);
     }
 
     private void HideScrollWarning()
     {
+        _scrollWarningActive = false;
         ScrollWarningText.Visibility = Visibility.Collapsed;
     }
 
