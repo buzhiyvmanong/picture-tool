@@ -60,10 +60,19 @@ public sealed class OcrService
             }
 
             var lineText = string.Join(" ", line.Words.Select(w => w.Text));
-            sb.Append(RemoveCjkSpaces(lineText));
+            sb.Append(PostProcess(lineText));
         }
 
         return sb.ToString().Trim();
+    }
+
+    internal static string PostProcess(string text)
+    {
+        text = RemoveCjkSpaces(text);
+        text = NormalizeCjkLatinSpaces(text);
+        text = FixCommonMisrecognitions(text);
+        text = NormalizePunctuation(text);
+        return text;
     }
 
     internal static string RemoveCjkSpaces(string text)
@@ -76,6 +85,35 @@ public sealed class OcrService
             text = Regex.Replace(text, $@"([{cjk}])\s+([{cjk}])", "$1$2");
         } while (text != previous);
 
+        return text;
+    }
+
+    internal static string NormalizeCjkLatinSpaces(string text)
+    {
+        const string cjk = @"\u2E80-\u9FFF\uF900-\uFAFF\uFE30-\uFE4F";
+        // CJK 与拉丁字符之间保留恰好一个空格
+        text = Regex.Replace(text, $@"([{cjk}])\s{{2,}}([A-Za-z0-9])", "$1 $2");
+        text = Regex.Replace(text, $@"([A-Za-z0-9])\s{{2,}}([{cjk}])", "$1 $2");
+        // CJK 与标点之间去掉空格
+        text = Regex.Replace(text, $@"([{cjk}])\s+([，。、；：！？）》」』】〕\]\)）])", "$1$2");
+        text = Regex.Replace(text, $@"([（《「『【〔\[\(（])\s+([{cjk}])", "$1$2");
+        return text;
+    }
+
+    internal static string FixCommonMisrecognitions(string text)
+    {
+        // Windows OCR 常见误识别修正
+        text = text.Replace("〔", "[");
+        text = text.Replace("〕", "]");
+        text = text.Replace("臼", "白");
+        text = text.Replace("扌比", "批");
+        return text;
+    }
+
+    internal static string NormalizePunctuation(string text)
+    {
+        // 将孤立的全角标点规范化（不影响正常使用的全角标点）
+        text = Regex.Replace(text, @"\s+([，。、；：！？])", "$1");
         return text;
     }
 
