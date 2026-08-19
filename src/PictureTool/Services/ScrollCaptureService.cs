@@ -8,8 +8,6 @@ namespace PictureTool.Services;
 
 public sealed class ScrollCaptureService
 {
-    public const int ManualScrollDelta = -360;
-
     private const int MaxFrames = 24;
     private const int CaptureEdgeTrim = 3;
     private const int AutoScrollDelta = -120;
@@ -24,13 +22,6 @@ public sealed class ScrollCaptureService
     private const double MinContinuousOverlapRatio = 0.24;
     private const double HighConfidenceOverlapRatio = 0.50;
     private const double AmbiguousScoreGap = 2.5;
-
-    public string Capture(DrawingRectangle region)
-    {
-        using var session = StartSession(region);
-        session.CaptureAuto();
-        return session.Finish();
-    }
 
     public CaptureSession StartSession(DrawingRectangle region)
     {
@@ -173,7 +164,7 @@ public sealed class ScrollCaptureService
         return new OverlapMatch(bestOverlap, bestScore, alternateScore, minOverlap, height);
     }
 
-    private static double CompareOverlap(Bitmap previous, Bitmap current, int overlap)
+    private static unsafe double CompareOverlap(Bitmap previous, Bitmap current, int overlap)
     {
         var width = Math.Min(previous.Width, current.Width);
         var rowSamples = Math.Clamp(overlap / 12, 12, 72);
@@ -181,28 +172,49 @@ public sealed class ScrollCaptureService
         long diff = 0;
         var samples = 0;
 
-        for (var row = 0; row < rowSamples; row++)
+        var prevRect = new DrawingRectangle(0, 0, previous.Width, previous.Height);
+        var currRect = new DrawingRectangle(0, 0, current.Width, current.Height);
+        var prevData = previous.LockBits(prevRect, ImageLockMode.ReadOnly, PixelFormat.Format32bppPArgb);
+        var currData = current.LockBits(currRect, ImageLockMode.ReadOnly, PixelFormat.Format32bppPArgb);
+
+        try
         {
-            var sampleY = (row + 0.5) * overlap / rowSamples;
-            var previousY = previous.Height - overlap + (int)Math.Floor(sampleY);
-            var currentY = (int)Math.Floor(sampleY);
+            var prevStride = prevData.Stride;
+            var currStride = currData.Stride;
+            var prevScan = (byte*)prevData.Scan0;
+            var currScan = (byte*)currData.Scan0;
 
-            if (previousY < 0 || previousY >= previous.Height || currentY < 0 || currentY >= current.Height)
+            for (var row = 0; row < rowSamples; row++)
             {
-                continue;
-            }
+                var sampleY = (row + 0.5) * overlap / rowSamples;
+                var previousY = previous.Height - overlap + (int)Math.Floor(sampleY);
+                var currentY = (int)Math.Floor(sampleY);
 
-            for (var col = 0; col < colSamples; col++)
-            {
-                var x = Math.Clamp((int)Math.Floor((col + 0.5) * width / colSamples), 0, width - 1);
-                var left = previous.GetPixel(x, previousY);
-                var right = current.GetPixel(x, currentY);
+                if (previousY < 0 || previousY >= previous.Height || currentY < 0 || currentY >= current.Height)
+                {
+                    continue;
+                }
 
-                diff += Math.Abs(left.R - right.R);
-                diff += Math.Abs(left.G - right.G);
-                diff += Math.Abs(left.B - right.B);
-                samples++;
+                var prevRow = prevScan + previousY * prevStride;
+                var currRow = currScan + currentY * currStride;
+
+                for (var col = 0; col < colSamples; col++)
+                {
+                    var x = Math.Clamp((int)Math.Floor((col + 0.5) * width / colSamples), 0, width - 1);
+                    var prevOffset = x * 4;
+                    var currOffset = x * 4;
+
+                    diff += Math.Abs(prevRow[prevOffset] - currRow[currOffset]);
+                    diff += Math.Abs(prevRow[prevOffset + 1] - currRow[currOffset + 1]);
+                    diff += Math.Abs(prevRow[prevOffset + 2] - currRow[currOffset + 2]);
+                    samples++;
+                }
             }
+        }
+        finally
+        {
+            previous.UnlockBits(prevData);
+            current.UnlockBits(currData);
         }
 
         return samples == 0 ? double.MaxValue : diff / (samples * 3.0);
@@ -402,6 +414,8 @@ public sealed class ScrollCaptureService
         private readonly DrawingRectangle _region;
         private readonly List<FramePart> _parts = new();
         private BitmapHolder? _previousHolder;
+        private string? _cachedPreviewPath;
+        private int _cachedPreviewParts;
         private int _unmatchedSteps;
         private bool _finished;
 
@@ -439,6 +453,7 @@ public sealed class ScrollCaptureService
                     _parts.Add(new FramePart(currentPath, 0));
                     _previousHolder = new BitmapHolder(currentPath);
                     _unmatchedSteps = 0;
+                    InvalidatePreviewCache();
                     return CaptureStepResult.Added(createPreview ? CreatePreview() : null, FrameCount);
                 }
 
@@ -478,6 +493,7 @@ public sealed class ScrollCaptureService
                 _parts.Add(new FramePart(currentPath, overlap));
                 _previousHolder.Replace(currentPath);
                 _unmatchedSteps = 0;
+                InvalidatePreviewCache();
                 return CaptureStepResult.Added(createPreview ? CreatePreview() : null, FrameCount);
             }
             catch
@@ -583,13 +599,34 @@ public sealed class ScrollCaptureService
                 CaptureCurrent();
             }
 
-            return Stitch(_parts, deleteParts: false);
+            if (_cachedPreviewPath is not null && _cachedPreviewParts == _parts.Count)
+            {
+                return _cachedPreviewPath;
+            }
+
+            InvalidatePreviewCache();
+            _cachedPreviewPath = Stitch(_parts, deleteParts: false);
+            _cachedPreviewParts = _parts.Count;
+            return _cachedPreviewPath;
+        }
+
+        private void InvalidatePreviewCache()
+        {
+            if (_cachedPreviewPath is null)
+            {
+                return;
+            }
+
+            TempImageStore.TryDelete(_cachedPreviewPath);
+            _cachedPreviewPath = null;
+            _cachedPreviewParts = 0;
         }
 
         public void Dispose()
         {
             _previousHolder?.Dispose();
             _previousHolder = null;
+            InvalidatePreviewCache();
 
             if (_finished)
             {

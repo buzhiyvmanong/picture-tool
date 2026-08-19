@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore tests/PictureTool.Tests/PictureTool.Tests.csproj
+
+      - name: Build
+        run: dotnet build tests/PictureTool.Tests/PictureTool.Tests.csproj --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test tests/PictureTool.Tests/PictureTool.Tests.csproj --configuration Release --no-build --verbosity normal

@@ -61,6 +61,12 @@ powershell -ExecutionPolicy Bypass -File .\scripts\measure-memory.ps1 -Scenario 
 - 多贴图场景增长可控
 - 临时图片可自动清理
 
+## 滚动截图内存优化（2026-08-19）
+
+- 进入滚动模式后释放全屏底图，降低多屏场景内存占用。
+- 预览拼接结果按帧数缓存，避免每加一帧都全量重拼。
+- 重叠检测改用 `LockBits`，减少 `GetPixel` 开销。
+
 ## 下一次测量步骤
 
 ### 标注窗口

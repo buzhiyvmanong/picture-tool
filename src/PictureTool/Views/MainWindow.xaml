@@ -31,6 +31,9 @@
         <Button Content="截图"
                 MinWidth="82"
                 Click="CaptureArea_Click" />
+        <Button Content="滚动截图"
+                MinWidth="96"
+                Click="ScrollCapture_Click" />
         <Button Content="贴图"
                 MinWidth="82"
                 Click="PasteImage_Click" />

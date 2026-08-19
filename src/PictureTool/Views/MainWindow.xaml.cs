@@ -48,6 +48,11 @@ public partial class MainWindow : Window
         _coordinator.StartAreaCapture();
     }
 
+    private void ScrollCapture_Click(object sender, RoutedEventArgs e)
+    {
+        _coordinator.StartScrollCapture();
+    }
+
     private void PasteImage_Click(object sender, RoutedEventArgs e)
     {
         _coordinator.OpenClipboardImage();

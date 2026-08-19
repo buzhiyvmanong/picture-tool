@@ -40,18 +40,13 @@ public partial class CaptureOverlayWindow : Window
     private const double ScrollPreviewGap = 14;
     private const double ScrollPreviewMinWidth = 180;
     private const double ScrollPreviewMaxWidth = 360;
-    private const int AutoScrollWheelDelta = -120;
-    private const int AutoScrollFrameDelayMs = 1400;
-    private const int AutoScrollRetryDelayMs = 700;
-    private const int AutoScrollMaxRetryCount = 5;
-    private const int ManualCaptureSettleMs = 80;
-    private const int ManualWheelDebounceMs = 420;
-    private const int ManualWheelRapidWindowMs = 700;
-    private const int ManualWheelRapidThreshold = 2;
-    private const string ManualScrollTooFastWarning =
-        "滚动速度过快，请重新回到截图位置，缓慢滑动";
-    private const string ManualScrollBusyWarning =
-        "正在拼接上一屏，请稍候再滚动";
+    private const int AutoScrollWheelDelta = ScrollCaptureSettings.AutoScrollWheelDelta;
+    private const int AutoScrollFrameDelayMs = ScrollCaptureSettings.AutoScrollFrameDelayMs;
+    private const int AutoScrollRetryDelayMs = ScrollCaptureSettings.AutoScrollRetryDelayMs;
+    private const int AutoScrollMaxRetryCount = ScrollCaptureSettings.AutoScrollMaxRetryCount;
+    private const int ManualCaptureSettleMs = ScrollCaptureSettings.ManualCaptureSettleMs;
+    private const string ManualScrollTooFastWarning = ScrollCaptureSettings.ManualScrollTooFastWarning;
+    private const string ManualScrollBusyWarning = ScrollCaptureSettings.ManualScrollBusyWarning;
     private const int GwlExStyle = -20;
     private const long WsExTransparent = 0x00000020L;
     private const int WmNchitTest = 0x0084;
@@ -83,11 +78,8 @@ public partial class CaptureOverlayWindow : Window
     private double _strokeWidth = 4;
     private double _textFontSize = DefaultTextFontSize;
     private ScrollCaptureService.CaptureSession? _scrollSession;
-    private GlobalWheelHook? _globalWheelHook;
+    private ScrollCaptureController? _scrollController;
     private HwndSource? _hwndSource;
-    private CancellationTokenSource? _manualWheelDebounce;
-    private int _manualWheelEventsInWindow;
-    private long _manualWheelWindowStartTick;
     private bool _scrollWarningActive;
     private CancellationTokenSource? _autoScrollCancellation;
     private DrawingRectangle _scrollRegion;
@@ -262,13 +254,13 @@ public partial class CaptureOverlayWindow : Window
 
     private async void RootCanvas_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
     {
-        if (_isScrollSessionActive && _globalWheelHook is not null)
+        if (!_isScrollSessionActive || _scrollController is null || _scrollSession is null)
         {
             return;
         }
 
         var wheelPoint = e.GetPosition(RootCanvas);
-        if (!_isScrollSessionActive || _scrollSession is null || !_selection.Contains(wheelPoint))
+        if (!_selection.Contains(wheelPoint))
         {
             return;
         }
@@ -472,6 +464,20 @@ public partial class CaptureOverlayWindow : Window
         StopAutoScroll();
         await WaitForScrollIdleAsync();
         CancelCapture();
+    }
+
+    private async void SaveScroll_Click(object sender, RoutedEventArgs e)
+    {
+        StopAutoScroll();
+        await WaitForScrollIdleAsync();
+        await SaveScrollCaptureAsync();
+    }
+
+    private async void AnnotateScroll_Click(object sender, RoutedEventArgs e)
+    {
+        StopAutoScroll();
+        await WaitForScrollIdleAsync();
+        await FinishScrollCaptureAsync(openAnnotation: true);
     }
 
     private async void FinishScroll_Click(object sender, RoutedEventArgs e)
@@ -1021,6 +1027,7 @@ public partial class CaptureOverlayWindow : Window
         _scrollRegion = ToAbsolutePixelRect(_selection);
 
         ScreenshotImage.Visibility = Visibility.Collapsed;
+        ReleaseFullscreenBitmap();
         SelectionRect.IsHitTestVisible = true;
         AnnotationInkCanvas.Visibility = Visibility.Collapsed;
         Toolbar.Visibility = Visibility.Collapsed;
@@ -1053,97 +1060,63 @@ public partial class CaptureOverlayWindow : Window
 
     private void StartManualScrollCapture()
     {
-        _globalWheelHook?.Dispose();
-        _globalWheelHook = new GlobalWheelHook();
-        _globalWheelHook.WheelScrolled += OnGlobalWheelScrolled;
-        _globalWheelHook.Install();
+        _scrollController?.Dispose();
+        _scrollController = new ScrollCaptureController();
+        _scrollController.WheelScrolled += OnControllerWheelScrolled;
+        _scrollController.CaptureRequested += () => _ = RunManualCaptureOnlyAsync();
+        _scrollController.WarningRequested += (banner, toolbar) =>
+            Dispatcher.BeginInvoke(() => ShowManualScrollWarning(banner, toolbar));
+        try
+        {
+            _scrollController.Install();
+        }
+        catch (Exception ex)
+        {
+            AutoScrollButton.Content = $"滚轮监听失败：{ex.Message}";
+        }
+
         EnableScrollPassThrough();
     }
 
     private void StopManualScrollCapture()
     {
-        _manualWheelDebounce?.Cancel();
-        _manualWheelDebounce = null;
-
-        if (_globalWheelHook is not null)
+        if (_scrollController is not null)
         {
-            _globalWheelHook.WheelScrolled -= OnGlobalWheelScrolled;
-            _globalWheelHook.Dispose();
-            _globalWheelHook = null;
+            _scrollController.WheelScrolled -= OnControllerWheelScrolled;
+            _scrollController.Dispose();
+            _scrollController = null;
         }
 
         DisableScrollPassThrough();
         SetOverlayExcludedFromCapture(false);
-        _manualWheelEventsInWindow = 0;
         _scrollWarningActive = false;
     }
 
-    private void OnGlobalWheelScrolled(int wheelDelta, DrawingPoint screenPoint)
+    private void OnControllerWheelScrolled(int wheelDelta, DrawingPoint screenPoint)
     {
         Dispatcher.BeginInvoke(() =>
         {
-            if (!_isScrollSessionActive || _scrollSession is null || wheelDelta == 0)
+            if (!_isScrollSessionActive || _scrollSession is null || _scrollController is null)
             {
                 return;
             }
 
-            if (_isAutoScrolling && !_isAutoScrollPaused)
-            {
-                return;
-            }
-
-            if (!ContainsScreenPoint(_scrollRegion, screenPoint))
-            {
-                return;
-            }
-
-            if (IsPointInsideScrollChrome(screenPoint))
-            {
-                return;
-            }
-
-            if (_isScrollBusy)
-            {
-                ShowManualScrollWarning(ManualScrollBusyWarning, "正在拼接，请稍候");
-                return;
-            }
-
-            TrackManualWheelPace();
-
-            _manualWheelDebounce?.Cancel();
-            _manualWheelDebounce = new CancellationTokenSource();
-            var token = _manualWheelDebounce.Token;
-            _ = DebouncedManualWheelCaptureAsync(token);
+            _scrollController.TryHandleWheel(
+                wheelDelta,
+                screenPoint,
+                _scrollRegion,
+                _isScrollBusy,
+                _isAutoScrolling,
+                _isAutoScrollPaused,
+                IsPointInsideScrollChrome);
         });
     }
 
-    private async Task DebouncedManualWheelCaptureAsync(CancellationToken token)
+    private void ReleaseFullscreenBitmap()
     {
-        try
-        {
-            await Task.Delay(ManualWheelDebounceMs, token);
-            await RunManualCaptureOnlyAsync();
-        }
-        catch (OperationCanceledException)
-        {
-            ShowManualScrollWarning(ManualScrollTooFastWarning, "滚动过快，请放慢");
-        }
-    }
-
-    private void TrackManualWheelPace()
-    {
-        var now = Environment.TickCount64;
-        if (now - _manualWheelWindowStartTick > ManualWheelRapidWindowMs)
-        {
-            _manualWheelEventsInWindow = 0;
-            _manualWheelWindowStartTick = now;
-        }
-
-        _manualWheelEventsInWindow++;
-        if (_manualWheelEventsInWindow >= ManualWheelRapidThreshold)
-        {
-            ShowManualScrollWarning(ManualScrollTooFastWarning, "滚动过快，请放慢");
-        }
+        ScreenshotImage.Source = null;
+        _sourceBitmap = null;
+        MemoryPressureService.TrimSoon();
     }
 
     private async Task RunManualCaptureOnlyAsync()
@@ -1445,29 +1418,6 @@ public partial class CaptureOverlayWindow : Window
         }
     }
 
-    private async Task<T> RunWithOverlayInvisibleAsync<T>(Func<T> action)
-    {
-        SetOverlayInputTransparent(false);
-        Hide();
-        await Task.Delay(80);
-
-        try
-        {
-            return await Task.Run(action);
-        }
-        finally
-        {
-            if (!_isCompleting)
-            {
-                Show();
-                Topmost = true;
-                SetOverlayInputTransparent(false);
-                Activate();
-                RootCanvas.Focus();
-            }
-        }
-    }
-
     private static async Task<T> RunWithoutOverlayInputTransparentAsync<T>(Func<T> action)
     {
         return await Task.Run(action);
@@ -1524,9 +1474,12 @@ public partial class CaptureOverlayWindow : Window
     private void UpdateScrollButtonStates()
     {
         var hasSession = _scrollSession is not null;
-        AutoScrollButton.IsEnabled = hasSession && (!_isScrollBusy || _isAutoScrolling);
+        var canInteract = hasSession && (!_isScrollBusy || _isAutoScrolling);
+        AutoScrollButton.IsEnabled = canInteract;
+        SaveScrollButton.IsEnabled = canInteract;
+        AnnotateScrollButton.IsEnabled = canInteract;
         CancelScrollButton.IsEnabled = !_isScrollBusy || _isAutoScrolling;
-        FinishScrollButton.IsEnabled = hasSession && (!_isScrollBusy || _isAutoScrolling);
+        FinishScrollButton.IsEnabled = canInteract;
     }
 
     private void StopAutoScroll()
@@ -1535,7 +1488,7 @@ public partial class CaptureOverlayWindow : Window
         _autoScrollCancellation = null;
         _isAutoScrolling = false;
         _isAutoScrollPaused = false;
-        if (_isScrollSessionActive && _globalWheelHook is not null)
+        if (_isScrollSessionActive && _scrollController is not null)
         {
             EnableScrollPassThrough();
         }
@@ -1554,13 +1507,6 @@ public partial class CaptureOverlayWindow : Window
         PositionScrollToolbar();
     }
 
-    private void QueueScrollCaptureResult(ScrollCaptureService.CaptureStepResult result)
-    {
-        Dispatcher.BeginInvoke(
-            (Action)(() => ApplyScrollCaptureResult(result)),
-            System.Windows.Threading.DispatcherPriority.Background);
-    }
-
     private void ApplyScrollCaptureResult(ScrollCaptureService.CaptureStepResult result)
     {
         switch (result.Status)
@@ -1571,7 +1517,7 @@ public partial class CaptureOverlayWindow : Window
                     UpdateScrollPreview(result.PreviewPath);
                 }
 
-                _manualWheelEventsInWindow = 0;
+                _scrollController?.ResetPace();
                 HideScrollWarning();
                 UpdateScrollControls();
                 break;
@@ -2388,14 +2334,6 @@ public partial class CaptureOverlayWindow : Window
         }
 
         Close();
-    }
-
-    private static bool ContainsScreenPoint(DrawingRectangle region, DrawingPoint point)
-    {
-        return point.X >= region.Left
-            && point.X < region.Right
-            && point.Y >= region.Top
-            && point.Y < region.Bottom;
     }
 
     private bool IsPointInsideScrollChrome(DrawingPoint screenPoint)

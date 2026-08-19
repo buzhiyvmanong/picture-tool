@@ -10,6 +10,7 @@ public sealed class TrayService : IDisposable
     public TrayService(
         Action showDashboard,
         Action captureArea,
+        Action scrollCapture,
         Action pasteImage,
         Action openSettings,
         Action showAllPins,
@@ -19,6 +20,7 @@ public sealed class TrayService : IDisposable
         var menu = new Forms.ContextMenuStrip();
         menu.Items.Add("打开面板", null, (_, _) => showDashboard());
         menu.Items.Add("截图", null, (_, _) => captureArea());
+        menu.Items.Add("滚动截图", null, (_, _) => scrollCapture());
         menu.Items.Add("贴图", null, (_, _) => pasteImage());
         menu.Items.Add("快捷键设置", null, (_, _) => openSettings());
         menu.Items.Add(new Forms.ToolStripSeparator());

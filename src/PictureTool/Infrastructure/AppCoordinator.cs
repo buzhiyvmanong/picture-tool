@@ -2,7 +2,6 @@ using System.Windows.Threading;
 using PictureTool.Models;
 using PictureTool.Services;
 using PictureTool.Views;
-using DrawingRectangle = System.Drawing.Rectangle;
 
 namespace PictureTool.Infrastructure;
 
@@ -10,7 +9,6 @@ public sealed class AppCoordinator : IDisposable
 {
     private readonly Dispatcher _dispatcher;
     private readonly ScreenshotService _screenshots = new();
-    private readonly ScrollCaptureService _scrollCaptures = new();
     private readonly ClipboardImageService _clipboard = new();
     private readonly SettingsService _settingsService = new();
     private AppSettings _settings = new();
@@ -36,6 +34,7 @@ public sealed class AppCoordinator : IDisposable
         _tray = new TrayService(
             showDashboard: ShowDashboard,
             captureArea: StartAreaCapture,
+            scrollCapture: StartScrollCapture,
             pasteImage: OpenClipboardImage,
             openSettings: OpenSettings,
             showAllPins: ShowAllPins,
@@ -128,134 +127,6 @@ public sealed class AppCoordinator : IDisposable
         _settingsService.Save(_settings);
         _mainWindow.SetHotkeySummary(_settings.Hotkeys);
         _mainWindow.SetStatus($"快捷键已保存：{_settings.Hotkeys.CaptureArea} 截图，{_settings.Hotkeys.PasteImage} 粘贴图片。");
-    }
-
-    private async Task BeginScrollCaptureSession(DrawingRectangle region)
-    {
-        _mainWindow?.SetStatus("滚动截图准备中...");
-        await Task.Delay(180);
-
-        ScrollCaptureService.CaptureSession? session;
-        try
-        {
-            session = await Task.Run(() => _scrollCaptures.StartSession(region));
-        }
-        catch (Exception ex)
-        {
-            ShowDashboard();
-            _mainWindow?.SetStatus($"滚动截图启动失败：{ex.Message}");
-            return;
-        }
-
-        var controller = new ScrollCaptureControlWindow();
-        controller.SetFrameCount(session.FrameCount);
-
-        controller.ManualCaptureRequested += async (_, _) =>
-        {
-            if (session is null)
-            {
-                return;
-            }
-
-            controller.SetBusy(true);
-            controller.SetStatus("截取中...");
-            controller.Hide();
-            await Task.Delay(140);
-
-            try
-            {
-                var added = await Task.Run(() => session.CaptureCurrent());
-                controller.Show();
-                controller.Activate();
-
-                if (added)
-                {
-                    controller.SetFrameCount(session.FrameCount);
-                }
-                else
-                {
-                    controller.SetStatus($"没有检测到新内容，已截取 {session.FrameCount} 屏");
-                }
-            }
-            catch (Exception ex)
-            {
-                controller.Show();
-                controller.Activate();
-                controller.SetStatus($"截取失败：{ex.Message}");
-            }
-            finally
-            {
-                if (session is not null)
-                {
-                    controller.SetBusy(false);
-                }
-            }
-        };
-
-        controller.AutoCaptureRequested += async (_, _) =>
-        {
-            if (session is null)
-            {
-                return;
-            }
-
-            controller.SetBusy(true);
-            controller.SetStatus("自动滚动中...");
-            controller.Hide();
-            await Task.Delay(140);
-
-            try
-            {
-                await Task.Run(() => session.CaptureAuto());
-                var outputPath = await Task.Run(() => session.Finish());
-                session = null;
-                controller.CloseSilently();
-                _mainWindow?.SetStatus("滚动截图完成。");
-                OpenAnnotation(outputPath);
-            }
-            catch (Exception ex)
-            {
-                controller.Show();
-                controller.Activate();
-                controller.SetStatus($"自动滚动失败：{ex.Message}");
-                controller.SetBusy(false);
-            }
-        };
-
-        controller.FinishRequested += async (_, _) =>
-        {
-            if (session is null)
-            {
-                return;
-            }
-
-            controller.SetBusy(true);
-            controller.SetStatus("拼接中...");
-
-            try
-            {
-                var outputPath = await Task.Run(() => session.Finish());
-                session = null;
-                controller.CloseSilently();
-                _mainWindow?.SetStatus("滚动截图完成。");
-                OpenAnnotation(outputPath);
-            }
-            catch (Exception ex)
-            {
-                controller.SetStatus($"拼接失败：{ex.Message}");
-                controller.SetBusy(false);
-            }
-        };
-
-        controller.CancelRequested += (_, _) =>
-        {
-            session?.Dispose();
-            session = null;
-            _mainWindow?.SetStatus("滚动截图已取消。");
-        };
-
-        controller.Show();
-        controller.Activate();
     }
 
     private void OpenAnnotation(string imagePath)
