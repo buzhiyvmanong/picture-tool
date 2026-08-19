@@ -1,6 +1,7 @@
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
+using DrawingPoint = System.Drawing.Point;
 using DrawingRectangle = System.Drawing.Rectangle;
 
 namespace PictureTool.Services;
@@ -207,28 +208,29 @@ public sealed class ScrollCaptureService
         return samples == 0 ? double.MaxValue : diff / (samples * 3.0);
     }
 
-    private static void ScrollWheel(DrawingRectangle region, int wheelDelta)
+    private static void ScrollWheel(
+        DrawingRectangle region,
+        int wheelDelta,
+        DrawingPoint? scrollPoint = null)
     {
-        var x = region.Left + region.Width / 2;
-        var y = region.Top + region.Height / 2;
+        var x = scrollPoint?.X ?? region.Left + region.Width / 2;
+        var y = scrollPoint?.Y ?? region.Top + region.Height / 2;
+        x = Math.Clamp(x, region.Left, region.Right - 1);
+        y = Math.Clamp(y, region.Top, region.Bottom - 1);
         SetCursorPos(x, y);
 
-        var target = FindWheelTarget(x, y);
-        if (target != IntPtr.Zero)
+        var targets = FindWheelTargets(x, y);
+        if (targets.Count > 0)
         {
-            PostMessage(target, WmMouseWheel, MakeWheelWParam(wheelDelta), MakeLParam(x, y));
+            foreach (var target in targets)
+            {
+                PostMessage(target, WmMouseWheel, MakeWheelWParam(wheelDelta), MakeLParam(x, y));
+            }
+
             return;
         }
 
-        mouse_event(MouseEventWheel, 0, 0, wheelDelta, UIntPtr.Zero);
-    }
-
-    private static void ScrollWheelByInput(DrawingRectangle region, int wheelDelta)
-    {
-        var x = region.Left + region.Width / 2;
-        var y = region.Top + region.Height / 2;
-        SetCursorPos(x, y);
-        Thread.Sleep(30);
+        Thread.Sleep(60);
         mouse_event(MouseEventWheel, 0, 0, wheelDelta, UIntPtr.Zero);
     }
 
@@ -242,7 +244,7 @@ public sealed class ScrollCaptureService
         return new IntPtr((y << 16) | (x & 0xFFFF));
     }
 
-    private static IntPtr FindWheelTarget(int x, int y)
+    private static IReadOnlyList<IntPtr> FindWheelTargets(int x, int y)
     {
         var currentProcessId = Environment.ProcessId;
         var point = new Point(x, y);
@@ -269,15 +271,60 @@ public sealed class ScrollCaptureService
 
             var clientPoint = point;
             ScreenToClient(hwnd, ref clientPoint);
-            var child = ChildWindowFromPointEx(
-                hwnd,
-                clientPoint,
-                CwpSkipInvisible | CwpSkipDisabled | CwpSkipTransparent);
+            var child = FindDeepestChildWindow(hwnd, clientPoint);
+            var targets = new List<IntPtr>();
+            AddTarget(targets, child == IntPtr.Zero ? hwnd : child);
+            AddTarget(targets, hwnd);
 
-            return child == IntPtr.Zero ? hwnd : child;
+            var parent = child;
+            while (parent != IntPtr.Zero)
+            {
+                parent = GetParent(parent);
+                AddTarget(targets, parent);
+                if (parent == hwnd)
+                {
+                    break;
+                }
+            }
+
+            return targets;
         }
 
-        return IntPtr.Zero;
+        return [];
+    }
+
+    private static IntPtr FindDeepestChildWindow(IntPtr hwnd, Point clientPoint)
+    {
+        var current = hwnd;
+        var point = clientPoint;
+
+        while (true)
+        {
+            var child = ChildWindowFromPointEx(
+                current,
+                point,
+                CwpSkipInvisible | CwpSkipDisabled | CwpSkipTransparent);
+
+            if (child == IntPtr.Zero || child == current)
+            {
+                return current == hwnd ? IntPtr.Zero : current;
+            }
+
+            var parent = current;
+            current = child;
+            var screenPoint = point;
+            ClientToScreen(parent, ref screenPoint);
+            point = screenPoint;
+            ScreenToClient(current, ref point);
+        }
+    }
+
+    private static void AddTarget(List<IntPtr> targets, IntPtr hwnd)
+    {
+        if (hwnd != IntPtr.Zero && !targets.Contains(hwnd))
+        {
+            targets.Add(hwnd);
+        }
     }
 
     [DllImport("user32.dll")]
@@ -296,6 +343,9 @@ public sealed class ScrollCaptureService
     private static extern IntPtr GetWindow(IntPtr hWnd, uint uCmd);
 
     [DllImport("user32.dll")]
+    private static extern IntPtr GetParent(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
     private static extern bool IsWindowVisible(IntPtr hWnd);
 
     [DllImport("user32.dll")]
@@ -306,6 +356,9 @@ public sealed class ScrollCaptureService
 
     [DllImport("user32.dll")]
     private static extern bool ScreenToClient(IntPtr hWnd, ref Point point);
+
+    [DllImport("user32.dll")]
+    private static extern bool ClientToScreen(IntPtr hWnd, ref Point point);
 
     [DllImport("user32.dll")]
     private static extern IntPtr ChildWindowFromPointEx(IntPtr hWndParent, Point point, uint flags);
@@ -471,22 +524,19 @@ public sealed class ScrollCaptureService
             return CaptureCurrentForAuto(createPreview);
         }
 
-        public CaptureStepResult ScrollAndCapture(int wheelDelta, bool createPreview = true)
+        public CaptureStepResult CaptureManualStep(bool createPreview = true)
         {
             ThrowIfFinished();
-
-            ScrollWheel(_region, ClampWheelDelta(wheelDelta));
-            Thread.Sleep(ScrollDelayMs);
-            return CaptureCurrent(createPreview);
+            return CaptureCurrentForAuto(createPreview);
         }
 
-        public CaptureStepResult ScrollByInputAndCapture(int wheelDelta, bool createPreview = true)
+        public CaptureStepResult ScrollAndCapture(int wheelDelta, DrawingPoint? scrollPoint = null, bool createPreview = true)
         {
             ThrowIfFinished();
 
-            ScrollWheelByInput(_region, ClampWheelDelta(wheelDelta));
+            ScrollWheel(_region, NormalizeWheelDelta(wheelDelta), scrollPoint);
             Thread.Sleep(ScrollDelayMs);
-            return CaptureCurrent(createPreview);
+            return CaptureCurrentForAuto(createPreview);
         }
 
         private CaptureStepResult RejectCurrentFrame(string currentPath, bool countUnmatchedStep)
@@ -579,14 +629,14 @@ public sealed class ScrollCaptureService
             && Score <= ControlledScrollMatchScoreLimit;
     }
 
-    private static int ClampWheelDelta(int wheelDelta)
+    private static int NormalizeWheelDelta(int wheelDelta)
     {
         if (wheelDelta == 0)
         {
             return -120;
         }
 
-        return Math.Sign(wheelDelta) * 120;
+        return wheelDelta;
     }
 
     public sealed record CaptureStepResult(CaptureStepStatus Status, string? PreviewPath, int FrameCount)
