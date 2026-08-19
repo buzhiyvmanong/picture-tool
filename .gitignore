@@ -1,0 +1,33 @@
+# Build output
+bin/
+obj/
+**/bin/
+**/obj/
+
+# User and IDE files
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Local tool state
+.codex/
+.agents/
+.local/
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+*.cache
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Publish artifacts
+publish/
+artifacts/
+*.nupkg
