@@ -10,9 +10,7 @@ public sealed class ScrollCaptureService
 {
     private const int MaxFrames = 24;
     private const int CaptureEdgeTrim = 3;
-    private const int AutoScrollDelta = -120;
     private const int ScrollDelayMs = 520;
-    private const int AutoScrollDelayMs = 1400;
     private const int MinOverlap = 48;
     private const int OverlapSearchStep = 8;
     private const double SameFrameScore = 2.0;
@@ -426,8 +424,6 @@ public sealed class ScrollCaptureService
 
         public int FrameCount => _parts.Count;
 
-        public string? LatestFramePath => _parts.Count == 0 ? null : _parts[^1].Path;
-
         public CaptureStepResult CaptureCurrent(bool createPreview = true)
         {
             return CaptureCurrent(createPreview, useControlledScrollMatching: false, countUnmatchedStep: true);
@@ -503,34 +499,6 @@ public sealed class ScrollCaptureService
             }
         }
 
-        public CaptureStepResult CaptureAuto()
-        {
-            ThrowIfFinished();
-
-            CaptureStepResult lastResult = CaptureStepResult.Unchanged(FrameCount);
-            while (_parts.Count < MaxFrames)
-            {
-                lastResult = CaptureAutoStep(createPreview: false);
-
-                if (lastResult.Status == CaptureStepStatus.Indeterminate)
-                {
-                    continue;
-                }
-
-                if (lastResult.Status != CaptureStepStatus.Added)
-                {
-                    return lastResult;
-                }
-            }
-
-            return lastResult;
-        }
-
-        public CaptureStepResult CaptureAutoStep(bool createPreview = true)
-        {
-            return CaptureAutoStep(AutoScrollDelta, AutoScrollDelayMs, createPreview);
-        }
-
         public CaptureStepResult CaptureAutoStep(int wheelDelta, int delayMs, bool createPreview = true)
         {
             ThrowIfFinished();
@@ -550,7 +518,7 @@ public sealed class ScrollCaptureService
         {
             ThrowIfFinished();
 
-            ScrollWheel(_region, NormalizeWheelDelta(wheelDelta), scrollPoint);
+            ScrollWheel(_region, wheelDelta == 0 ? -120 : wheelDelta, scrollPoint);
             Thread.Sleep(ScrollDelayMs);
             return CaptureCurrentForAuto(createPreview);
         }
@@ -664,16 +632,6 @@ public sealed class ScrollCaptureService
         public bool IsUsableForControlledScroll =>
             Overlap >= MinimumOverlap
             && Score <= ControlledScrollMatchScoreLimit;
-    }
-
-    private static int NormalizeWheelDelta(int wheelDelta)
-    {
-        if (wheelDelta == 0)
-        {
-            return -120;
-        }
-
-        return wheelDelta;
     }
 
     public sealed record CaptureStepResult(CaptureStepStatus Status, string? PreviewPath, int FrameCount)

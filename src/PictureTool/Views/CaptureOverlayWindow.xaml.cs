@@ -2151,14 +2151,36 @@ public partial class CaptureOverlayWindow : Window
             }
             case MosaicOverlayItem mosaic:
             {
+                try
+                {
+                    var pixelRect = ToSourcePixelRect(mosaic.Bounds);
+                    if (pixelRect.Width > 1 && pixelRect.Height > 1)
+                    {
+                        var cropped = new CroppedBitmap(SourceBitmap, pixelRect);
+                        cropped.Freeze();
+                        var block = Math.Max(4, MosaicBlockSize * Math.Max(_scaleX, _scaleY));
+                        var pixelated = new TransformedBitmap(cropped, new ScaleTransform(1 / block, 1 / block));
+                        pixelated.Freeze();
+
+                        var image = new System.Windows.Controls.Image
+                        {
+                            Source = pixelated,
+                            Stretch = Stretch.Fill,
+                            IsHitTestVisible = false
+                        };
+
+                        RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.NearestNeighbor);
+                        PositionRect(image, mosaic.Bounds);
+                        return image;
+                    }
+                }
+                catch { }
+
                 var rect = new WpfRectangle
                 {
-                    Fill = new SolidColorBrush(WpfColor.FromArgb(150, 152, 162, 179)),
-                    Stroke = new SolidColorBrush(WpfColor.FromArgb(210, 255, 255, 255)),
-                    StrokeThickness = 1,
+                    Fill = new SolidColorBrush(WpfColor.FromArgb(180, 152, 162, 179)),
                     IsHitTestVisible = false
                 };
-
                 PositionRect(rect, mosaic.Bounds);
                 return rect;
             }
@@ -2169,7 +2191,6 @@ public partial class CaptureOverlayWindow : Window
                     Fill = new SolidColorBrush(WpfColor.FromArgb(80, highlight.Color.R, highlight.Color.G, highlight.Color.B)),
                     IsHitTestVisible = false
                 };
-
                 PositionRect(rect, highlight.Bounds);
                 return rect;
             }
