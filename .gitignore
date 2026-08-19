@@ -31,3 +31,6 @@ Desktop.ini
 publish/
 artifacts/
 *.nupkg
+
+# Inno Setup output
+installer/Output/
