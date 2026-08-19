@@ -116,21 +116,15 @@ dotnet run --project .\src\PictureTool\PictureTool.csproj
 & "C:\Program Files\dotnet\dotnet.exe" build .\src\PictureTool\PictureTool.csproj
 ```
 
-## 构建安装包
+## 构建发布
 
-一键构建（需要安装 [Inno Setup 6](https://jrsoftware.org/isdl.php)）：
+一键构建独立可执行文件：
 
 ```powershell
 .\build.ps1
 ```
 
-仅发布不生成安装包：
-
-```powershell
-.\build.ps1 -SkipInstaller
-```
-
-生成的安装包位于 `publish\installer\PictureTool-Setup-1.0.0.exe`。
+生成的 `publish\win-x64\PictureTool.exe` 是单文件独立程序，双击即可运行，无需安装 .NET 运行时。
 
 ## 运行测试
 
