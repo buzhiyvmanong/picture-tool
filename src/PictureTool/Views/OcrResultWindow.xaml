@@ -1,0 +1,47 @@
+<Window x:Class="PictureTool.Views.OcrResultWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="提取结果"
+        Width="640"
+        Height="480"
+        MinWidth="480"
+        MinHeight="320"
+        Background="{StaticResource PanelBrush}"
+        PreviewKeyDown="OcrResultWindow_PreviewKeyDown">
+  <Grid Margin="20">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+
+    <TextBlock Text="提取到的文字"
+               Foreground="{StaticResource TextBrush}"
+               FontSize="18"
+               FontWeight="SemiBold" />
+
+    <TextBox x:Name="ResultTextBox"
+             Grid.Row="1"
+             Margin="0,12,0,16"
+             AcceptsReturn="True"
+             TextWrapping="Wrap"
+             VerticalScrollBarVisibility="Auto"
+             HorizontalScrollBarVisibility="Auto"
+             FontFamily="Segoe UI"
+             FontSize="14"
+             Padding="10"
+             Background="White"
+             BorderBrush="#D0D5DD" />
+
+    <StackPanel Grid.Row="2"
+                Orientation="Horizontal"
+                HorizontalAlignment="Right">
+      <Button Content="复制文字"
+              MinWidth="96"
+              Click="Copy_Click" />
+      <Button Content="关闭"
+              MinWidth="72"
+              Click="Close_Click" />
+    </StackPanel>
+  </Grid>
+</Window>

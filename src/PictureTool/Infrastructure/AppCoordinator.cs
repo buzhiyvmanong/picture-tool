@@ -36,6 +36,7 @@ public sealed class AppCoordinator : IDisposable
             captureArea: StartAreaCapture,
             scrollCapture: StartScrollCapture,
             pasteImage: OpenClipboardImage,
+            extractClipboardText: ExtractClipboardText,
             openSettings: OpenSettings,
             showAllPins: ShowAllPins,
             closeAllPins: CloseAllPins,
@@ -90,6 +91,19 @@ public sealed class AppCoordinator : IDisposable
         }
 
         OpenAnnotation(imagePath);
+    }
+
+    public async void ExtractClipboardText()
+    {
+        var bitmap = System.Windows.Clipboard.GetImage();
+        if (bitmap is null)
+        {
+            ShowDashboard();
+            _mainWindow?.SetStatus("剪贴板里没有可用图片。");
+            return;
+        }
+
+        await OcrUiHelper.RunAsync(null, bitmap).ConfigureAwait(true);
     }
 
     public void OpenSettings()

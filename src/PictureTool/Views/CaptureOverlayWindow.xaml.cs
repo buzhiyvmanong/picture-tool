@@ -591,6 +591,14 @@ public partial class CaptureOverlayWindow : Window
 
     private void Accept_Click(object sender, RoutedEventArgs e) => CopyAndClose();
 
+    private async void Ocr_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_hasSelection) return;
+        var bitmap = RenderSelectedBitmap();
+        if (bitmap is null) return;
+        await OcrUiHelper.RunAsync(this, bitmap).ConfigureAwait(true);
+    }
+
     private void BeginSelection(WpfPoint point)
     {
         ScreenshotImage.Visibility = Visibility.Visible;

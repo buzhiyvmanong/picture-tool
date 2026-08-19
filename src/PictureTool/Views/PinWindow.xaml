@@ -24,6 +24,8 @@
         <MenuItem x:Name="TopmostMenuItem"
                   Header="取消置顶"
                   Click="ToggleTopmost_Click" />
+        <MenuItem Header="提取文字"
+                  Click="ExtractText_Click" />
         <Separator />
         <MenuItem Header="关闭贴图"
                   Click="CloseMenu_Click" />

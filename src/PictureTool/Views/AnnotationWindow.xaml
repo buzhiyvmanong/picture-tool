@@ -31,6 +31,8 @@
                 Click="Copy_Click" />
         <Button Content="保存"
                 Click="Save_Click" />
+        <Button Content="提取文字"
+                Click="Ocr_Click" />
       </StackPanel>
     </Border>
 

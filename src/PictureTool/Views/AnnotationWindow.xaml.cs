@@ -131,6 +131,11 @@ public partial class AnnotationWindow : Window
         SaveCurrent();
     }
 
+    private async void Ocr_Click(object sender, RoutedEventArgs e)
+    {
+        await OcrUiHelper.RunForPathAsync(this, _imagePath).ConfigureAwait(true);
+    }
+
     private void AnnotationWindow_PreviewKeyDown(object sender, WpfKeyEventArgs e)
     {
         if (e.Key == Key.Escape)

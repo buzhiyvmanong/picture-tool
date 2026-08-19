@@ -459,6 +459,12 @@
                 ToolTip="滚动截图"
                 Style="{StaticResource ToolbarButtonStyle}"
                 Click="ScrollCapture_Click" />
+        <Button Content="T"
+                ToolTip="提取文字"
+                FontFamily="Segoe UI"
+                FontWeight="SemiBold"
+                Style="{StaticResource ToolbarButtonStyle}"
+                Click="Ocr_Click" />
         <Rectangle Width="1"
                    Height="28"
                    Fill="#D0D5DD"

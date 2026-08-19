@@ -115,6 +115,11 @@ public partial class PinWindow : Window
         MemoryPressureService.TrimSoon();
     }
 
+    private async void ExtractText_Click(object sender, RoutedEventArgs e)
+    {
+        await OcrUiHelper.RunForPathAsync(this, _imagePath).ConfigureAwait(true);
+    }
+
     private void ToggleTopmost_Click(object sender, RoutedEventArgs e)
     {
         Topmost = !Topmost;
