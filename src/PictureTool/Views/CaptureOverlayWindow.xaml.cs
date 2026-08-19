@@ -44,12 +44,15 @@ public partial class CaptureOverlayWindow : Window
     private const int AutoScrollFrameDelayMs = 1400;
     private const int AutoScrollRetryDelayMs = 700;
     private const int AutoScrollMaxRetryCount = 5;
-    private const int ManualCaptureSettleMs = 480;
+    private const int ManualCaptureSettleMs = 80;
     private const int ManualWheelDebounceMs = 420;
     private const int GwlExStyle = -20;
     private const long WsExTransparent = 0x00000020L;
     private const int WmNchitTest = 0x0084;
     private const int HtTransparent = -1;
+    private const uint WdaNone = 0x00000000;
+    private const uint WdaExcludeFromCapture = 0x00000011;
+    private const int DwmwaExcludedFromCapture = 34;
 
     private readonly ScreenshotFrame _frame;
     private readonly ScrollCaptureService _scrollCaptures = new();
@@ -140,6 +143,9 @@ public partial class CaptureOverlayWindow : Window
         CancelActiveTextBox();
         StopAutoScroll();
         StopManualScrollCapture();
+        SetOverlayExcludedFromCapture(false);
+        _hwndSource?.RemoveHook(HwndSourceHook);
+        _hwndSource = null;
         _scrollSession?.Dispose();
         _scrollSession = null;
         ScrollPreviewImage.Source = null;
@@ -1008,6 +1014,7 @@ public partial class CaptureOverlayWindow : Window
         SizeBadge.Visibility = Visibility.Collapsed;
         ScrollToolbar.Visibility = Visibility.Visible;
         UpdateSelectionVisuals();
+        SetOverlayExcludedFromCapture(true);
 
         SetScrollBusy(true, "准备中...");
         try
@@ -1050,6 +1057,7 @@ public partial class CaptureOverlayWindow : Window
         }
 
         DisableScrollPassThrough();
+        SetOverlayExcludedFromCapture(false);
     }
 
     private void OnGlobalWheelScrolled(int wheelDelta, DrawingPoint screenPoint)
@@ -1114,10 +1122,7 @@ public partial class CaptureOverlayWindow : Window
 
         try
         {
-            DisableScrollPassThrough();
-            Hide();
             await Task.Delay(ManualCaptureSettleMs);
-
             var result = session.CaptureManualStep(createPreview: true);
             if (result.Status is ScrollCaptureService.CaptureStepStatus.Indeterminate
                 or ScrollCaptureService.CaptureStepStatus.Discontinuous)
@@ -1135,13 +1140,6 @@ public partial class CaptureOverlayWindow : Window
         {
             if (!_isCompleting)
             {
-                Show();
-                Topmost = true;
-                if (_isScrollSessionActive && _globalWheelHook is not null && !_isAutoScrolling)
-                {
-                    EnableScrollPassThrough();
-                }
-
                 SetScrollBusy(false);
             }
         }
@@ -1158,10 +1156,7 @@ public partial class CaptureOverlayWindow : Window
         SetScrollBusy(true, "滚动中...");
         try
         {
-            DisableScrollPassThrough();
-            Hide();
             await Task.Delay(ManualCaptureSettleMs);
-
             var result = session.ScrollAndCapture(wheelDelta, scrollPoint);
             if (result.Status is ScrollCaptureService.CaptureStepStatus.Indeterminate
                 or ScrollCaptureService.CaptureStepStatus.Discontinuous)
@@ -1179,13 +1174,6 @@ public partial class CaptureOverlayWindow : Window
         {
             if (!_isCompleting)
             {
-                Show();
-                Topmost = true;
-                if (_isScrollSessionActive && _globalWheelHook is not null && !_isAutoScrolling)
-                {
-                    EnableScrollPassThrough();
-                }
-
                 SetScrollBusy(false);
             }
         }
@@ -2430,6 +2418,19 @@ public partial class CaptureOverlayWindow : Window
         _scrollPassThroughActive = false;
     }
 
+    private void SetOverlayExcludedFromCapture(bool exclude)
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd == IntPtr.Zero)
+        {
+            return;
+        }
+
+        SetWindowDisplayAffinity(hwnd, exclude ? WdaExcludeFromCapture : WdaNone);
+        var value = exclude ? 1 : 0;
+        _ = DwmSetWindowAttribute(hwnd, DwmwaExcludedFromCapture, ref value, sizeof(int));
+    }
+
     private IntPtr HwndSourceHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
         if (msg != WmNchitTest || !_scrollPassThroughActive || !_isScrollSessionActive)
@@ -2782,4 +2783,10 @@ public partial class CaptureOverlayWindow : Window
 
     [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW", SetLastError = true)]
     private static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
+
+    [DllImport("user32.dll")]
+    private static extern bool SetWindowDisplayAffinity(IntPtr hwnd, uint dwAffinity);
+
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int dwAttribute, ref int pvAttribute, int cbAttribute);
 }
