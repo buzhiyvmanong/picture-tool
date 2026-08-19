@@ -12,6 +12,7 @@ public sealed class AppCoordinator : IDisposable
     private readonly ClipboardImageService _clipboard = new();
     private readonly SettingsService _settingsService = new();
     private AppSettings _settings = new();
+    public HistoryService History { get; } = new();
     private MainWindow? _mainWindow;
     private TrayService? _tray;
     private HotkeyService? _hotkeys;
@@ -75,7 +76,12 @@ public sealed class AppCoordinator : IDisposable
         var overlay = new CaptureOverlayWindow(frame, startInScrollMode);
 
         overlay.PinRequested += (_, path) => OpenPin(path);
-        overlay.ScrollCaptureCompleted += (_, path) => OpenAnnotation(path);
+        overlay.ScrollCaptureCompleted += (_, path) =>
+        {
+            History.Add(path);
+            OpenAnnotation(path);
+        };
+        overlay.CaptureCompleted += (_, path) => History.Add(path);
         overlay.Closed += (_, _) => TempImageStore.TryDelete(frame.ImagePath);
         overlay.Show();
     }
@@ -141,6 +147,11 @@ public sealed class AppCoordinator : IDisposable
         _settingsService.Save(_settings);
         _mainWindow.SetHotkeySummary(_settings.Hotkeys);
         _mainWindow.SetStatus($"快捷键已保存：{_settings.Hotkeys.CaptureArea} 截图，{_settings.Hotkeys.PasteImage} 粘贴图片。");
+    }
+
+    public void OpenAnnotationFromHistory(string imagePath)
+    {
+        OpenAnnotation(imagePath);
     }
 
     private void OpenAnnotation(string imagePath)

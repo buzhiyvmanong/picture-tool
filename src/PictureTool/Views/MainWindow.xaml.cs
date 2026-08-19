@@ -1,7 +1,9 @@
 using System.ComponentModel;
 using System.Windows;
+using System.Windows.Input;
 using PictureTool.Infrastructure;
 using PictureTool.Models;
+using PictureTool.Services;
 
 namespace PictureTool.Views;
 
@@ -14,6 +16,7 @@ public partial class MainWindow : Window
     {
         _coordinator = coordinator;
         InitializeComponent();
+        HistoryList.ItemsSource = coordinator.History.Items;
     }
 
     public void SetStatus(string message)
@@ -61,5 +64,18 @@ public partial class MainWindow : Window
     private void Settings_Click(object sender, RoutedEventArgs e)
     {
         _coordinator.OpenSettings();
+    }
+
+    private void ClearHistory_Click(object sender, RoutedEventArgs e)
+    {
+        _coordinator.History.ClearAll();
+    }
+
+    private void HistoryList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (HistoryList.SelectedItem is HistoryItem item)
+        {
+            _coordinator.OpenAnnotationFromHistory(item.FilePath);
+        }
     }
 }

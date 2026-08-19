@@ -40,14 +40,20 @@ public static class OcrUiHelper
             return;
         }
 
-        if (owner is not null)
+        var progress = new OcrProgressWindow();
+        var safeOwner = SafeOwner(owner);
+        if (safeOwner is not null)
         {
-            owner.IsEnabled = false;
+            progress.Owner = safeOwner;
         }
+
+        progress.Show();
 
         try
         {
             var result = await Service.RecognizeAsync(bitmap).ConfigureAwait(true);
+            progress.Close();
+
             if (!result.IsSuccess)
             {
                 MessageBox.Show(
@@ -60,29 +66,22 @@ public static class OcrUiHelper
             }
 
             var window = new OcrResultWindow(result.Text);
-            var safeOwner = SafeOwner(owner);
-            if (safeOwner is not null)
+            if (SafeOwner(owner) is { } resultOwner)
             {
-                window.Owner = safeOwner;
+                window.Owner = resultOwner;
             }
 
             window.ShowDialog();
         }
         catch (Exception ex)
         {
+            progress.Close();
             MessageBox.Show(
                 SafeOwner(owner),
                 $"提取文字失败：{ex.Message}",
                 DialogTitle,
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
-        }
-        finally
-        {
-            if (owner is { IsLoaded: true })
-            {
-                owner.IsEnabled = true;
-            }
         }
     }
 

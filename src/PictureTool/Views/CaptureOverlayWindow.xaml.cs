@@ -77,6 +77,7 @@ public partial class CaptureOverlayWindow : Window
     private WpfColor _strokeColor = WpfColor.FromRgb(240, 68, 56);
     private double _strokeWidth = 4;
     private double _textFontSize = DefaultTextFontSize;
+    private int _numberCounter;
     private ScrollCaptureService.CaptureSession? _scrollSession;
     private ScrollCaptureController? _scrollController;
     private HwndSource? _hwndSource;
@@ -97,6 +98,7 @@ public partial class CaptureOverlayWindow : Window
 
     public event EventHandler<string>? PinRequested;
     public event EventHandler<string>? ScrollCaptureCompleted;
+    public event EventHandler<string>? CaptureCompleted;
     public event EventHandler? CaptureCanceled;
 
     private BitmapSource SourceBitmap =>
@@ -375,6 +377,17 @@ public partial class CaptureOverlayWindow : Window
             return;
         }
 
+        if (_toolMode == ToolMode.NumberMarker)
+        {
+            BeginEditSnapshot();
+            _numberCounter++;
+            _overlayItems.Add(new NumberMarkerOverlayItem(point, _numberCounter, _strokeColor));
+            RebuildOverlayElements();
+            CommitEditSnapshot();
+            e.Handled = true;
+            return;
+        }
+
         BeginEditSnapshot();
 
         if (!IsDragOverlayTool(_toolMode))
@@ -426,6 +439,10 @@ public partial class CaptureOverlayWindow : Window
     private void Line_Click(object sender, RoutedEventArgs e) => SetTool(ToolMode.Line);
 
     private void Arrow_Click(object sender, RoutedEventArgs e) => SetTool(ToolMode.Arrow);
+
+    private void Highlight_Click(object sender, RoutedEventArgs e) => SetTool(ToolMode.Highlight);
+
+    private void NumberMarker_Click(object sender, RoutedEventArgs e) => SetTool(ToolMode.NumberMarker);
 
     private void Pen_Click(object sender, RoutedEventArgs e) => SetTool(ToolMode.Pen);
 
@@ -1623,6 +1640,8 @@ public partial class CaptureOverlayWindow : Window
             ArrowButton,
             PenButton,
             TextButton,
+            HighlightButton,
+            NumberMarkerButton,
             MosaicButton,
             EraserButton
         };
@@ -1642,6 +1661,8 @@ public partial class CaptureOverlayWindow : Window
             ToolMode.Arrow => ArrowButton,
             ToolMode.Pen => PenButton,
             ToolMode.Text => TextButton,
+            ToolMode.Highlight => HighlightButton,
+            ToolMode.NumberMarker => NumberMarkerButton,
             ToolMode.Mosaic => MosaicButton,
             ToolMode.Eraser => EraserButton,
             _ => MoveButton
@@ -1724,7 +1745,7 @@ public partial class CaptureOverlayWindow : Window
 
     private static bool UsesStrokeOptions(ToolMode mode)
     {
-        return mode is ToolMode.Rectangle or ToolMode.Ellipse or ToolMode.Line or ToolMode.Arrow or ToolMode.Pen;
+        return mode is ToolMode.Rectangle or ToolMode.Ellipse or ToolMode.Line or ToolMode.Arrow or ToolMode.Pen or ToolMode.Highlight;
     }
 
     private void BeginEditSnapshot()
@@ -1769,11 +1790,16 @@ public partial class CaptureOverlayWindow : Window
             _ => new WpfRectangle()
         };
 
-        shape.Stroke = new SolidColorBrush(_strokeColor);
-        shape.StrokeThickness = _strokeWidth;
-        shape.Fill = _toolMode == ToolMode.Mosaic
-            ? new SolidColorBrush(WpfColor.FromArgb(150, 152, 162, 179))
-            : WpfBrushes.Transparent;
+        shape.Stroke = _toolMode == ToolMode.Highlight
+            ? WpfBrushes.Transparent
+            : new SolidColorBrush(_strokeColor);
+        shape.StrokeThickness = _toolMode == ToolMode.Highlight ? 0 : _strokeWidth;
+        shape.Fill = _toolMode switch
+        {
+            ToolMode.Mosaic => new SolidColorBrush(WpfColor.FromArgb(150, 152, 162, 179)),
+            ToolMode.Highlight => new SolidColorBrush(WpfColor.FromArgb(80, _strokeColor.R, _strokeColor.G, _strokeColor.B)),
+            _ => WpfBrushes.Transparent
+        };
         shape.IsHitTestVisible = false;
 
         if (shape is not Line)
@@ -1842,6 +1868,10 @@ public partial class CaptureOverlayWindow : Window
                     AnnotationInkCanvas.Strokes.Add(stroke);
                 }
 
+                break;
+            case ToolMode.Highlight:
+                _overlayItems.Add(new HighlightOverlayItem(CreateRect(start, current), _strokeColor));
+                RebuildOverlayElements();
                 break;
             case ToolMode.Mosaic:
                 _overlayItems.Add(new MosaicOverlayItem(CreateRect(start, current)));
@@ -2034,9 +2064,15 @@ public partial class CaptureOverlayWindow : Window
 
     private WpfRect GetOverlayItemBounds(OverlayItem item)
     {
+        const double markerSize = 28;
         return item switch
         {
             MosaicOverlayItem mosaic => mosaic.Bounds,
+            HighlightOverlayItem highlight => highlight.Bounds,
+            NumberMarkerOverlayItem marker => new WpfRect(
+                marker.Position.X - markerSize / 2,
+                marker.Position.Y - markerSize / 2,
+                markerSize, markerSize),
             _ => WpfRect.Empty
         };
     }
@@ -2126,6 +2162,49 @@ public partial class CaptureOverlayWindow : Window
                 PositionRect(rect, mosaic.Bounds);
                 return rect;
             }
+            case HighlightOverlayItem highlight:
+            {
+                var rect = new WpfRectangle
+                {
+                    Fill = new SolidColorBrush(WpfColor.FromArgb(80, highlight.Color.R, highlight.Color.G, highlight.Color.B)),
+                    IsHitTestVisible = false
+                };
+
+                PositionRect(rect, highlight.Bounds);
+                return rect;
+            }
+            case NumberMarkerOverlayItem marker:
+            {
+                const double markerSize = 28;
+                var grid = new Grid
+                {
+                    Width = markerSize,
+                    Height = markerSize,
+                    IsHitTestVisible = false
+                };
+
+                grid.Children.Add(new Ellipse
+                {
+                    Fill = new SolidColorBrush(marker.Color),
+                    Width = markerSize,
+                    Height = markerSize
+                });
+
+                grid.Children.Add(new TextBlock
+                {
+                    Text = marker.Number.ToString(),
+                    Foreground = WpfBrushes.White,
+                    FontSize = 14,
+                    FontWeight = FontWeights.Bold,
+                    HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+                    VerticalAlignment = System.Windows.VerticalAlignment.Center,
+                    TextAlignment = TextAlignment.Center
+                });
+
+                InkCanvas.SetLeft(grid, marker.Position.X - markerSize / 2);
+                InkCanvas.SetTop(grid, marker.Position.Y - markerSize / 2);
+                return grid;
+            }
             default:
                 return new Canvas();
         }
@@ -2176,6 +2255,50 @@ public partial class CaptureOverlayWindow : Window
 
         context.DrawText(shadowText, new WpfPoint(item.Position.X + 1, item.Position.Y + 1));
         context.DrawText(foregroundText, item.Position);
+    }
+
+    private void DrawHighlightItems(DrawingContext context)
+    {
+        foreach (var item in _overlayItems.OfType<HighlightOverlayItem>())
+        {
+            var brush = new SolidColorBrush(WpfColor.FromArgb(80, item.Color.R, item.Color.G, item.Color.B));
+            context.DrawRectangle(brush, null, item.Bounds);
+        }
+    }
+
+    private void DrawNumberMarkerItems(DrawingContext context)
+    {
+        const double markerSize = 28;
+        var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+        var typeface = new Typeface(
+            new WpfFontFamily("Segoe UI"),
+            FontStyles.Normal,
+            FontWeights.Bold,
+            FontStretches.Normal);
+
+        foreach (var item in _overlayItems.OfType<NumberMarkerOverlayItem>())
+        {
+            var center = item.Position;
+            context.DrawEllipse(
+                new SolidColorBrush(item.Color),
+                null,
+                center,
+                markerSize / 2,
+                markerSize / 2);
+
+            var text = new FormattedText(
+                item.Number.ToString(),
+                CultureInfo.CurrentUICulture,
+                System.Windows.FlowDirection.LeftToRight,
+                typeface,
+                14,
+                WpfBrushes.White,
+                pixelsPerDip);
+
+            context.DrawText(text, new WpfPoint(
+                center.X - text.Width / 2,
+                center.Y - text.Height / 2));
+        }
     }
 
     private void DrawMosaicItem(DrawingContext context, WpfRect bounds)
@@ -2261,7 +2384,9 @@ public partial class CaptureOverlayWindow : Window
             return;
         }
 
-        WpfClipboard.SetImage(RenderSelectedBitmap());
+        var tempPath = SaveSelectedToTemp();
+        WpfClipboard.SetImage(BitmapLoader.LoadFrozen(tempPath));
+        CaptureCompleted?.Invoke(this, tempPath);
         CompleteAndClose();
     }
 
@@ -2289,9 +2414,11 @@ public partial class CaptureOverlayWindow : Window
             context.PushClip(new RectangleGeometry(new WpfRect(0, 0, _selection.Width, _selection.Height)));
             context.PushTransform(new TranslateTransform(-_selection.Left, -_selection.Top));
             context.DrawImage(SourceBitmap, new WpfRect(0, 0, RootCanvas.Width, RootCanvas.Height));
+            DrawHighlightItems(context);
             DrawMosaicItems(context);
             AnnotationInkCanvas.Strokes.Draw(context);
             DrawTextItems(context);
+            DrawNumberMarkerItems(context);
             context.Pop();
             context.Pop();
         }
@@ -2644,7 +2771,7 @@ public partial class CaptureOverlayWindow : Window
 
     private static bool IsDragOverlayTool(ToolMode mode)
     {
-        return mode is ToolMode.Rectangle or ToolMode.Ellipse or ToolMode.Line or ToolMode.Arrow or ToolMode.Mosaic;
+        return mode is ToolMode.Rectangle or ToolMode.Ellipse or ToolMode.Line or ToolMode.Arrow or ToolMode.Mosaic or ToolMode.Highlight;
     }
 
     private static bool IsToolbarSource(DependencyObject? source)
@@ -2706,6 +2833,8 @@ public partial class CaptureOverlayWindow : Window
         Pen,
         Text,
         Mosaic,
+        Highlight,
+        NumberMarker,
         Eraser
     }
 
@@ -2781,6 +2910,46 @@ public partial class CaptureOverlayWindow : Window
         public override bool IsEquivalent(OverlayItem other)
         {
             return other is MosaicOverlayItem mosaic && mosaic.Bounds.Equals(Bounds);
+        }
+    }
+
+    private sealed class HighlightOverlayItem : OverlayItem
+    {
+        public HighlightOverlayItem(WpfRect bounds, WpfColor color)
+        {
+            Bounds = bounds;
+            Color = color;
+        }
+
+        public WpfRect Bounds { get; }
+        public WpfColor Color { get; }
+
+        public override OverlayItem Clone() => new HighlightOverlayItem(Bounds, Color);
+
+        public override bool IsEquivalent(OverlayItem other)
+        {
+            return other is HighlightOverlayItem h && h.Bounds.Equals(Bounds) && h.Color == Color;
+        }
+    }
+
+    private sealed class NumberMarkerOverlayItem : OverlayItem
+    {
+        public NumberMarkerOverlayItem(WpfPoint position, int number, WpfColor color)
+        {
+            Position = position;
+            Number = number;
+            Color = color;
+        }
+
+        public WpfPoint Position { get; }
+        public int Number { get; }
+        public WpfColor Color { get; }
+
+        public override OverlayItem Clone() => new NumberMarkerOverlayItem(Position, Number, Color);
+
+        public override bool IsEquivalent(OverlayItem other)
+        {
+            return other is NumberMarkerOverlayItem n && n.Position.Equals(Position) && n.Number == Number && n.Color == Color;
         }
     }
 

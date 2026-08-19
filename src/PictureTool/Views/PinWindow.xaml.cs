@@ -13,6 +13,9 @@ namespace PictureTool.Views;
 public partial class PinWindow : Window
 {
     private readonly string _imagePath;
+    private double _zoomFactor = 1.0;
+    private double _baseWidth;
+    private double _baseHeight;
 
     public PinWindow(string imagePath)
     {
@@ -42,8 +45,40 @@ public partial class PinWindow : Window
         Width = initialWidth;
         Height = initialHeight;
 
+        _baseWidth = imageWidth;
+        _baseHeight = imageHeight;
+
         Left = SystemParameters.WorkArea.Left + Math.Max(0, (SystemParameters.WorkArea.Width - Width) / 2);
         Top = SystemParameters.WorkArea.Top + Math.Max(0, (SystemParameters.WorkArea.Height - Height) / 2);
+    }
+
+    protected override void OnMouseWheel(MouseWheelEventArgs e)
+    {
+        if (!Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+        {
+            base.OnMouseWheel(e);
+            return;
+        }
+
+        var delta = e.Delta > 0 ? 0.1 : -0.1;
+        _zoomFactor = Math.Clamp(_zoomFactor + delta, 0.2, 5.0);
+        var newW = Math.Max(96, _baseWidth * _zoomFactor);
+        var newH = Math.Max(72, _baseHeight * _zoomFactor);
+
+        var centerX = Left + Width / 2;
+        var centerY = Top + Height / 2;
+
+        PinnedImage.Width = newW;
+        PinnedImage.Height = newH;
+        PinContent.Width = newW;
+        PinContent.Height = newH;
+        Width = newW + 2;
+        Height = newH + 2;
+
+        Left = centerX - Width / 2;
+        Top = centerY - Height / 2;
+
+        e.Handled = true;
     }
 
     protected override void OnClosed(EventArgs e)
