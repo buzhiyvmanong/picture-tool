@@ -28,6 +28,7 @@ public sealed class AppCoordinator : IDisposable
         TempImageStore.CleanupStale(TimeSpan.FromHours(6));
         _settings = _settingsService.Load();
         _mainWindow = new MainWindow(this);
+        _mainWindow.ApplyPlacement(_settings.MainWindowPlacement);
         _hotkeys = new HotkeyService(_mainWindow);
         _mainWindow.Show();
         _mainWindow.SetHotkeySummary(_settings.Hotkeys);
@@ -216,9 +217,17 @@ public sealed class AppCoordinator : IDisposable
 
     private void Shutdown()
     {
+        SaveWindowPlacement();
         CloseAllPins();
         _mainWindow?.AllowClose();
         System.Windows.Application.Current.Shutdown();
+    }
+
+    private void SaveWindowPlacement()
+    {
+        if (_mainWindow is null) return;
+        _settings.MainWindowPlacement = _mainWindow.GetPlacement();
+        _settingsService.Save(_settings);
     }
 
     public void Dispose()

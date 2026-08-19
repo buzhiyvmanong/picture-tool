@@ -19,6 +19,21 @@ public partial class MainWindow : Window
         HistoryList.ItemsSource = coordinator.History.Items;
     }
 
+    public void ApplyPlacement(WindowPlacement? placement)
+    {
+        if (placement is null) return;
+        if (placement.Width > 0) Width = placement.Width;
+        if (placement.Height > 0) Height = placement.Height;
+        Left = placement.Left;
+        Top = placement.Top;
+        WindowStartupLocation = WindowStartupLocation.Manual;
+    }
+
+    public WindowPlacement GetPlacement() => new()
+    {
+        Left = Left, Top = Top, Width = Width, Height = Height
+    };
+
     public void SetStatus(string message)
     {
         StatusText.Text = message;

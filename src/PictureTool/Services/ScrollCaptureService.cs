@@ -53,7 +53,7 @@ public sealed class ScrollCaptureService
         return path;
     }
 
-    private static DrawingRectangle GetContentCaptureRegion(DrawingRectangle region)
+    internal static DrawingRectangle GetContentCaptureRegion(DrawingRectangle region)
     {
         var maxTrim = Math.Max(0, Math.Min(region.Width, region.Height) / 4);
         var trim = Math.Min(CaptureEdgeTrim, maxTrim);
@@ -225,6 +225,7 @@ public sealed class ScrollCaptureService
     {
         var x = scrollPoint?.X ?? region.Left + region.Width / 2;
         var y = scrollPoint?.Y ?? region.Top + region.Height / 2;
+        
         x = Math.Clamp(x, region.Left, region.Right - 1);
         y = Math.Clamp(y, region.Top, region.Bottom - 1);
         SetCursorPos(x, y);
@@ -619,7 +620,7 @@ public sealed class ScrollCaptureService
         }
     }
 
-    private sealed record OverlapMatch(int Overlap, double Score, double AlternateScore, int MinimumOverlap, int FrameHeight)
+    internal sealed record OverlapMatch(int Overlap, double Score, double AlternateScore, int MinimumOverlap, int FrameHeight)
     {
         public bool IsSameFrame => Score <= SameFrameScore && Overlap >= FrameHeight - 12;
 

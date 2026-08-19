@@ -68,7 +68,7 @@ dotnet build .\src\PictureTool\PictureTool.csproj -c Release
 
 普通截图框选后会进入原地编辑：
 
-- 支持移动、矩形、圆形、直线、箭头、画笔、文字、马赛克、橡皮擦、撤销、复制、保存、贴到屏幕。
+- 支持移动、矩形、圆形、直线、箭头、画笔、文字、马赛克、高亮、序号、橡皮擦、撤销、复制、保存、贴到屏幕。
 - 点击画笔、形状、箭头等工具后会显示二级工具条，可以选择颜色和粗细。
 - 点击文字工具后会显示二级工具条，可以选择颜色和字号。
 - 已添加的文字再次点击可以编辑；清空文字后确认会删除这个文本框。
@@ -81,11 +81,27 @@ dotnet build .\src\PictureTool\PictureTool.csproj -c Release
 - `Ctrl + C` 复制
 - `Ctrl + S` 保存
 
+## 提取文字（OCR）
+
+基于 Windows 内置 OCR 引擎，支持从截图中提取文字。入口：
+
+- 截图工具条中的 `T` 按钮
+- 标注窗口工具栏
+- 贴图窗口右键菜单
+- 托盘菜单"提取剪贴板文字"
+
+提取结果会弹出独立窗口，可直接复制。内置后处理优化：自动去除 CJK 字符间多余空格、修正常见误识别、规范标点。
+
 ## 贴图窗口
 
 - 左键拖动图片可以移动位置。
 - 双击图片可以关闭贴图。
-- 右键图片会打开菜单，支持复制图片、保存为、切换置顶、关闭贴图。
+- 右键图片会打开菜单，支持复制图片、保存为、切换置顶、提取文字、关闭贴图。
+- `Ctrl + 滚轮` 可缩放贴图。
+
+## 历史记录
+
+主窗口下方显示最近 50 张截图缩略图。双击可重新打开标注窗口编辑，支持清空历史。
 
 ## 启动
 
@@ -98,4 +114,10 @@ dotnet run --project .\src\PictureTool\PictureTool.csproj
 
 ```powershell
 & "C:\Program Files\dotnet\dotnet.exe" build .\src\PictureTool\PictureTool.csproj
+```
+
+## 运行测试
+
+```powershell
+dotnet test .\tests\PictureTool.Tests\PictureTool.Tests.csproj
 ```

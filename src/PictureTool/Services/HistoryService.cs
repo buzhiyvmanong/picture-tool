@@ -83,10 +83,12 @@ public sealed class HistoryItem
     public HistoryItem(string filePath, DateTime timestamp)
     {
         FilePath = filePath;
+        FileUri = new Uri(filePath);
         Timestamp = timestamp;
     }
 
     public string FilePath { get; }
+    public Uri FileUri { get; }
     public DateTime Timestamp { get; }
     public string DisplayTime => Timestamp.ToString("MM/dd HH:mm:ss");
 }

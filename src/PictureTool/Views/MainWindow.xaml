@@ -85,8 +85,14 @@
                       CornerRadius="4"
                       Height="70"
                       ClipToBounds="True">
-                <Image Source="{Binding FilePath}"
-                       Stretch="UniformToFill" />
+                <Image Stretch="UniformToFill">
+                  <Image.Source>
+                    <BitmapImage UriSource="{Binding FileUri}"
+                                 DecodePixelWidth="120"
+                                 CacheOption="OnLoad"
+                                 CreateOptions="IgnoreColorProfile" />
+                  </Image.Source>
+                </Image>
               </Border>
               <TextBlock Text="{Binding DisplayTime}"
                          FontSize="11"
