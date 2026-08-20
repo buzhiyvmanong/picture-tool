@@ -37,9 +37,12 @@
         <Button Content="贴图"
                 MinWidth="82"
                 Click="PasteImage_Click" />
-        <Button Content="快捷键设置"
-                MinWidth="112"
+        <Button Content="设置"
+                MinWidth="82"
                 Click="Settings_Click" />
+        <Button Content="使用指引"
+                MinWidth="96"
+                Click="UsageGuide_Click" />
       </WrapPanel>
       <TextBlock x:Name="HotkeySummaryText"
                  Text="快捷键加载中..."

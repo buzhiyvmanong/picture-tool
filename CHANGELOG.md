@@ -2,6 +2,13 @@
 
 All notable changes to PictureTool are documented in this file.
 
+## [1.0.5] - 2026-08-20
+
+### Added
+- Multi-page welcome wizard on first launch (intro, quick start, features, tips)
+- Usage guide accessible from main panel and tray menu at any time
+- "Don't show again" option for the welcome screen
+
 ## [1.0.4] - 2026-08-20
 
 ### Added

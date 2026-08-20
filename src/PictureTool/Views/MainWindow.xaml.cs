@@ -82,6 +82,11 @@ public partial class MainWindow : Window
         _coordinator.OpenSettings();
     }
 
+    private void UsageGuide_Click(object sender, RoutedEventArgs e)
+    {
+        _coordinator.ShowUsageGuide();
+    }
+
     private void ClearHistory_Click(object sender, RoutedEventArgs e)
     {
         _coordinator.History.ClearAll();

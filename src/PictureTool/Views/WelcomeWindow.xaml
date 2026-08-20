@@ -2,62 +2,226 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="欢迎使用 Picture Tool"
-        Width="520"
-        Height="420"
-        MinWidth="480"
-        MinHeight="380"
+        Width="640"
+        Height="560"
+        MinWidth="600"
+        MinHeight="520"
         ResizeMode="NoResize"
         WindowStartupLocation="CenterScreen"
         Background="{StaticResource PanelBrush}">
-  <Grid Margin="24">
+  <Grid Margin="28">
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto" />
       <RowDefinition Height="*" />
       <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
     </Grid.RowDefinitions>
 
-    <StackPanel>
-      <TextBlock Text="欢迎使用 Picture Tool"
-                 Foreground="{StaticResource TextBrush}"
-                 FontSize="22"
-                 FontWeight="SemiBold" />
-      <TextBlock Text="启动后会常驻系统托盘，可通过快捷键或托盘菜单使用。"
-                 Margin="0,8,0,0"
-                 TextWrapping="Wrap"
-                 Foreground="{StaticResource MutedTextBrush}" />
+    <!-- Header -->
+    <StackPanel Orientation="Horizontal">
+      <Border Width="48"
+              Height="48"
+              CornerRadius="10"
+              Background="#2563EB">
+        <TextBlock Text="PT"
+                   Foreground="White"
+                   FontSize="18"
+                   FontWeight="Bold"
+                   HorizontalAlignment="Center"
+                   VerticalAlignment="Center" />
+      </Border>
+      <StackPanel Margin="14,0,0,0" VerticalAlignment="Center">
+        <TextBlock x:Name="HeaderTitleText"
+                   Text="欢迎使用 Picture Tool"
+                   Foreground="{StaticResource TextBrush}"
+                   FontSize="22"
+                   FontWeight="SemiBold" />
+        <TextBlock x:Name="HeaderSubtitleText"
+                   Text="轻量截图、标注与贴图工具"
+                   Margin="0,4,0,0"
+                   Foreground="{StaticResource MutedTextBrush}" />
+      </StackPanel>
     </StackPanel>
 
+    <!-- Pages -->
     <Border Grid.Row="1"
-            Margin="0,20,0,0"
-            Padding="16"
+            Margin="0,24,0,0"
+            Padding="20"
             Background="White"
             BorderBrush="#E4E7EC"
             BorderThickness="1"
-            CornerRadius="8">
-      <StackPanel>
-        <TextBlock Text="常用操作"
-                   FontSize="15"
-                   FontWeight="SemiBold"
-                   Foreground="{StaticResource TextBrush}" />
-        <TextBlock Margin="0,12,0,0"
+            CornerRadius="10">
+      <Grid>
+      <!-- Page 0: Welcome -->
+      <StackPanel x:Name="PageWelcome" Visibility="Visible">
+        <TextBlock Text="Picture Tool 会在后台常驻系统托盘，随时通过快捷键或托盘菜单调用。"
                    TextWrapping="Wrap"
                    Foreground="{StaticResource TextBrush}"
-                   LineHeight="24">
-          <Run Text="• 区域截图：" /><Run x:Name="CaptureHotkeyRun" FontWeight="SemiBold" /><LineBreak />
-          <Run Text="• 贴图到屏幕：" /><Run x:Name="PasteHotkeyRun" FontWeight="SemiBold" /><LineBreak />
-          <Run Text="• 双击托盘图标打开主面板" /><LineBreak />
-          <Run Text="• 关闭主窗口只会隐藏到托盘，不会退出程序" /><LineBreak />
-          <Run Text="• 滚动截图、提取文字、历史记录等功能可在主面板和托盘菜单中找到" />
+                   LineHeight="26"
+                   FontSize="15" />
+        <TextBlock Margin="0,16,0,0"
+                   Text="你可以："
+                   FontWeight="SemiBold"
+                   Foreground="{StaticResource TextBrush}" />
+        <TextBlock Margin="0,10,0,0"
+                   TextWrapping="Wrap"
+                   Foreground="{StaticResource TextBrush}"
+                   LineHeight="28">
+          <Run Text="• 框选区域截图，原地标注后复制或保存" /><LineBreak />
+          <Run Text="• 滚动拼接长图，适合网页和文档" /><LineBreak />
+          <Run Text="• 贴图到屏幕，方便对照参考" /><LineBreak />
+          <Run Text="• 提取图片中的文字（OCR）" />
         </TextBlock>
       </StackPanel>
+
+      <!-- Page 1: Quick start -->
+      <StackPanel x:Name="PageQuickStart" Visibility="Collapsed">
+        <TextBlock Text="快速上手"
+                   FontSize="16"
+                   FontWeight="SemiBold"
+                   Foreground="{StaticResource TextBrush}" />
+        <Grid Margin="0,16,0,0">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="120" />
+            <ColumnDefinition Width="*" />
+          </Grid.ColumnDefinitions>
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+          </Grid.RowDefinitions>
+          <TextBlock Text="区域截图" Foreground="{StaticResource MutedTextBrush}" VerticalAlignment="Center" />
+          <TextBlock x:Name="CaptureHotkeyText"
+                     Grid.Column="1"
+                     FontWeight="SemiBold"
+                     Foreground="{StaticResource TextBrush}" />
+          <TextBlock Grid.Row="1" Margin="0,12,0,0" Text="贴图到屏幕" Foreground="{StaticResource MutedTextBrush}" VerticalAlignment="Center" />
+          <TextBlock x:Name="PasteHotkeyText"
+                     Grid.Row="1"
+                     Grid.Column="1"
+                     Margin="0,12,0,0"
+                     FontWeight="SemiBold"
+                     Foreground="{StaticResource TextBrush}" />
+          <TextBlock Grid.Row="2" Margin="0,12,0,0" Text="打开主面板" Foreground="{StaticResource MutedTextBrush}" VerticalAlignment="Center" />
+          <TextBlock Grid.Row="2" Grid.Column="1" Margin="0,12,0,0" Text="双击托盘图标" Foreground="{StaticResource TextBrush}" />
+          <TextBlock Grid.Row="3" Margin="0,12,0,0" Text="退出程序" Foreground="{StaticResource MutedTextBrush}" VerticalAlignment="Center" />
+          <TextBlock Grid.Row="3" Grid.Column="1" Margin="0,12,0,0" Text="托盘右键 → 退出" Foreground="{StaticResource TextBrush}" />
+        </Grid>
+        <Border Margin="0,20,0,0"
+                Padding="12"
+                Background="#F0F9FF"
+                BorderBrush="#BAE6FD"
+                BorderThickness="1"
+                CornerRadius="6">
+          <TextBlock TextWrapping="Wrap"
+                     Foreground="#0369A1"
+                     LineHeight="22">
+            关闭主窗口只会隐藏到托盘，不会退出程序。快捷键可在「设置」中自定义。
+          </TextBlock>
+        </Border>
+      </StackPanel>
+
+      <!-- Page 2: Features -->
+      <StackPanel x:Name="PageFeatures" Visibility="Collapsed">
+        <TextBlock Text="核心功能"
+                   FontSize="16"
+                   FontWeight="SemiBold"
+                   Foreground="{StaticResource TextBrush}" />
+        <UniformGrid Margin="0,16,0,0" Columns="2" Rows="3">
+          <Border Margin="0,0,8,8" Padding="12" Background="#F9FAFB" CornerRadius="6">
+            <StackPanel>
+              <TextBlock Text="📷 区域截图" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}" />
+              <TextBlock Margin="0,6,0,0" Text="框选后标注，支持矩形、箭头、文字、马赛克等" TextWrapping="Wrap" Foreground="{StaticResource MutedTextBrush}" FontSize="12" LineHeight="18" />
+            </StackPanel>
+          </Border>
+          <Border Margin="8,0,0,8" Padding="12" Background="#F9FAFB" CornerRadius="6">
+            <StackPanel>
+              <TextBlock Text="📜 滚动截图" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}" />
+              <TextBlock Margin="0,6,0,0" Text="自动或手动滚动，拼接长图，支持四个方向" TextWrapping="Wrap" Foreground="{StaticResource MutedTextBrush}" FontSize="12" LineHeight="18" />
+            </StackPanel>
+          </Border>
+          <Border Margin="0,0,8,8" Padding="12" Background="#F9FAFB" CornerRadius="6">
+            <StackPanel>
+              <TextBlock Text="📌 贴图" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}" />
+              <TextBlock Margin="0,6,0,0" Text="图片贴到屏幕，Ctrl+滚轮缩放，右键菜单操作" TextWrapping="Wrap" Foreground="{StaticResource MutedTextBrush}" FontSize="12" LineHeight="18" />
+            </StackPanel>
+          </Border>
+          <Border Margin="8,0,0,8" Padding="12" Background="#F9FAFB" CornerRadius="6">
+            <StackPanel>
+              <TextBlock Text="T 提取文字" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}" />
+              <TextBlock Margin="0,6,0,0" Text="基于 Windows OCR，截图后可一键提取文字" TextWrapping="Wrap" Foreground="{StaticResource MutedTextBrush}" FontSize="12" LineHeight="18" />
+            </StackPanel>
+          </Border>
+          <Border Margin="0,0,8,0" Padding="12" Background="#F9FAFB" CornerRadius="6">
+            <StackPanel>
+              <TextBlock Text="🕘 历史记录" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}" />
+              <TextBlock Margin="0,6,0,0" Text="主面板查看最近截图，双击重新编辑" TextWrapping="Wrap" Foreground="{StaticResource MutedTextBrush}" FontSize="12" LineHeight="18" />
+            </StackPanel>
+          </Border>
+          <Border Margin="8,0,0,0" Padding="12" Background="#F9FAFB" CornerRadius="6">
+            <StackPanel>
+              <TextBlock Text="💾 导出" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}" />
+              <TextBlock Margin="0,6,0,0" Text="支持 PNG、JPEG、WebP 格式保存" TextWrapping="Wrap" Foreground="{StaticResource MutedTextBrush}" FontSize="12" LineHeight="18" />
+            </StackPanel>
+          </Border>
+        </UniformGrid>
+      </StackPanel>
+
+      <!-- Page 3: Tips -->
+      <StackPanel x:Name="PageTips" Visibility="Collapsed">
+        <TextBlock Text="使用小贴士"
+                   FontSize="16"
+                   FontWeight="SemiBold"
+                   Foreground="{StaticResource TextBrush}" />
+        <TextBlock Margin="0,16,0,0"
+                   TextWrapping="Wrap"
+                   Foreground="{StaticResource TextBrush}"
+                   LineHeight="28">
+          <Run Text="1. 滚动截图时缓慢滚动，拼接更稳定。" /><LineBreak />
+          <Run Text="2. 截图工具条按 Esc 取消，Ctrl+Z 撤销标注。" /><LineBreak />
+          <Run Text="3. 贴图窗口双击关闭，右键可提取文字或保存。" /><LineBreak />
+          <Run Text="4. 托盘菜单可随时打开设置，调整快捷键和开机自启。" /><LineBreak />
+          <Run Text="5. 主面板「使用指引」可随时重新查看本指南。" />
+        </TextBlock>
+        <CheckBox x:Name="DontShowAgainCheckBox"
+                  Margin="0,24,0,0"
+                  Content="下次启动不再显示此欢迎页"
+                  IsChecked="True" />
+      </StackPanel>
+      </Grid>
     </Border>
 
-    <Button Grid.Row="2"
-            Content="开始使用"
-            HorizontalAlignment="Right"
-            Margin="0,20,0,0"
-            MinWidth="96"
-            IsDefault="True"
-            Click="Start_Click" />
+    <!-- Page indicator -->
+    <StackPanel Grid.Row="2"
+                Orientation="Horizontal"
+                HorizontalAlignment="Center"
+                Margin="0,16,0,0">
+      <Ellipse x:Name="Dot0" Width="8" Height="8" Fill="#2563EB" Margin="4,0" />
+      <Ellipse x:Name="Dot1" Width="8" Height="8" Fill="#D0D5DD" Margin="4,0" />
+      <Ellipse x:Name="Dot2" Width="8" Height="8" Fill="#D0D5DD" Margin="4,0" />
+      <Ellipse x:Name="Dot3" Width="8" Height="8" Fill="#D0D5DD" Margin="4,0" />
+    </StackPanel>
+
+    <!-- Footer -->
+    <Grid Grid.Row="3" Margin="0,16,0,0">
+      <Button x:Name="BackButton"
+              Content="上一步"
+              HorizontalAlignment="Left"
+              MinWidth="88"
+              Visibility="Collapsed"
+              Click="Back_Click" />
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+        <Button x:Name="SkipButton"
+                Content="跳过"
+                Margin="0,0,8,0"
+                Click="Skip_Click" />
+        <Button x:Name="NextButton"
+                Content="下一步"
+                MinWidth="96"
+                IsDefault="True"
+                Click="Next_Click" />
+      </StackPanel>
+    </Grid>
   </Grid>
 </Window>

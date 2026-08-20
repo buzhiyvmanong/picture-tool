@@ -14,6 +14,7 @@ public sealed class TrayService : IDisposable
         Action pasteImage,
         Action extractClipboardText,
         Action openSettings,
+        Action showUsageGuide,
         Action showAllPins,
         Action closeAllPins,
         Action exit)
@@ -24,7 +25,8 @@ public sealed class TrayService : IDisposable
         menu.Items.Add("滚动截图", null, (_, _) => scrollCapture());
         menu.Items.Add("贴图", null, (_, _) => pasteImage());
         menu.Items.Add("提取剪贴板文字", null, (_, _) => extractClipboardText());
-        menu.Items.Add("快捷键设置", null, (_, _) => openSettings());
+        menu.Items.Add("设置", null, (_, _) => openSettings());
+        menu.Items.Add("使用指引", null, (_, _) => showUsageGuide());
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add("显示所有贴图", null, (_, _) => showAllPins());
         menu.Items.Add("关闭所有贴图", null, (_, _) => closeAllPins());

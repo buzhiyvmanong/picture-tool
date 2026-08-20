@@ -45,6 +45,7 @@ public sealed class AppCoordinator : IDisposable
             pasteImage: OpenClipboardImage,
             extractClipboardText: ExtractClipboardText,
             openSettings: OpenSettings,
+            showUsageGuide: ShowUsageGuide,
             showAllPins: ShowAllPins,
             closeAllPins: CloseAllPins,
             exit: Shutdown);
@@ -68,9 +69,26 @@ public sealed class AppCoordinator : IDisposable
         {
             Owner = _mainWindow
         };
-        welcome.ShowDialog();
-        _settings.HasSeenWelcome = true;
-        _settingsService.Save(_settings);
+        if (welcome.ShowDialog() == true && welcome.DontShowAgain)
+        {
+            _settings.HasSeenWelcome = true;
+            _settingsService.Save(_settings);
+        }
+    }
+
+    public void ShowUsageGuide()
+    {
+        if (_mainWindow is null)
+        {
+            return;
+        }
+
+        ShowDashboard();
+        var guide = new WelcomeWindow(_settings.Hotkeys, isReplayMode: true)
+        {
+            Owner = _mainWindow
+        };
+        guide.ShowDialog();
     }
 
     private async Task CheckForUpdatesAsync()
