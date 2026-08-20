@@ -19,6 +19,7 @@ public sealed class AppCoordinator : IDisposable
     private HotkeyService? _hotkeys;
     private readonly List<PinWindow> _pins = new();
     private readonly UpdateCheckService _updateChecker = new();
+    private readonly AutoUpdateService _autoUpdater = new();
 
     public AppCoordinator(Dispatcher dispatcher)
     {
@@ -109,6 +110,54 @@ public sealed class AppCoordinator : IDisposable
             return;
         }
 
+        if (_autoUpdater.IsSquirrelInstalled)
+        {
+            var squirrelResult = await _autoUpdater.TryUpdateAsync().ConfigureAwait(false);
+            if (squirrelResult.Status == AutoUpdateStatus.Updated)
+            {
+                await PromptRestartAfterSquirrelUpdateAsync(squirrelResult.InstalledVersion).ConfigureAwait(false);
+                return;
+            }
+
+            if (squirrelResult.Status != AutoUpdateStatus.Failed)
+            {
+                return;
+            }
+        }
+
+        await PromptPortableUpdateAsync().ConfigureAwait(false);
+    }
+
+    private async Task PromptRestartAfterSquirrelUpdateAsync(string? installedVersion)
+    {
+        await _dispatcher.InvokeAsync(() =>
+        {
+            if (_mainWindow is null)
+            {
+                return;
+            }
+
+            var answer = System.Windows.MessageBox.Show(
+                _mainWindow,
+                $"已下载并安装 v{installedVersion}。\n是否立即重启以完成更新？",
+                "自动更新",
+                System.Windows.MessageBoxButton.YesNo,
+                System.Windows.MessageBoxImage.Information);
+
+            if (answer == System.Windows.MessageBoxResult.Yes)
+            {
+                SaveWindowPlacement();
+                AutoUpdateService.RestartApplication();
+            }
+            else
+            {
+                TrayNotificationService.Show("更新已安装", "重启 Picture Tool 后生效。");
+            }
+        });
+    }
+
+    private async Task PromptPortableUpdateAsync()
+    {
         var result = await _updateChecker.CheckAsync().ConfigureAwait(false);
         if (result.Status != UpdateCheckStatus.UpdateAvailable || result.LatestVersion is null)
         {

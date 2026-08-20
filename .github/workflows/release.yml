@@ -11,6 +11,8 @@ permissions:
 jobs:
   publish:
     runs-on: windows-latest
+    env:
+      MSIX_PUBLISHER: ${{ secrets.MSIX_PUBLISHER }}
     steps:
       - uses: actions/checkout@v4
 
@@ -22,13 +24,78 @@ jobs:
       - name: Test
         run: dotnet test tests/PictureTool.Tests/PictureTool.Tests.csproj -c Release --verbosity normal
 
-      - name: Publish
+      - name: Publish portable EXE
         run: dotnet publish src/PictureTool/PictureTool.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o publish/win-x64
+
+      - name: Build Squirrel packages
+        shell: pwsh
+        run: ./scripts/build-squirrel.ps1
+
+      - name: Build MSIX package
+        shell: pwsh
+        run: |
+          if (-not $env:MSIX_PUBLISHER) { $env:MSIX_PUBLISHER = "CN=Picture Tool" }
+          ./scripts/build-msix.ps1
+
+      - name: Resolve release version
+        id: version
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $version = $tag.TrimStart('v')
+          $parts = $version.Split('.')
+          while ($parts.Count -lt 4) { $parts += '0' }
+          $msixVersion = ($parts[0..3] -join '.')
+          "app_version=$version" >> $env:GITHUB_OUTPUT
+          "msix_version=$msixVersion" >> $env:GITHUB_OUTPUT
+          "msix_file=PictureTool_${msixVersion}_x64.msix" >> $env:GITHUB_OUTPUT
+
+      - name: Generate AppInstaller
+        shell: pwsh
+        run: |
+          if (-not $env:MSIX_PUBLISHER) { $env:MSIX_PUBLISHER = "CN=Picture Tool" }
+          ./scripts/generate-appinstaller.ps1 -Version "${{ steps.version.outputs.app_version }}" -MsixFileName "${{ steps.version.outputs.msix_file }}"
+
+      - name: Decode signing certificate
+        shell: pwsh
+        env:
+          SIGNING_CERT_BASE64: ${{ secrets.SIGNING_CERT_BASE64 }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:SIGNING_CERT_BASE64)) {
+            Write-Host "No signing certificate configured. Skipping CI signing."
+            exit 0
+          }
+          $path = "$env:RUNNER_TEMP\signing.pfx"
+          [IO.File]::WriteAllBytes($path, [Convert]::FromBase64String($env:SIGNING_CERT_BASE64))
+          "SIGNING_CERT_PATH=$path" >> $env:GITHUB_ENV
+
+      - name: Sign release artifacts
+        shell: pwsh
+        run: |
+          if (-not $env:SIGNING_CERT_PATH) {
+            Write-Host "SIGNING_CERT_PATH not set. Skipping signing."
+            exit 0
+          }
+          $files = @(
+            "publish/win-x64/PictureTool.exe",
+            "publish/msix/${{ steps.version.outputs.msix_file }}"
+          )
+          Get-ChildItem publish/squirrel/releases -Include *.exe,*.nupkg -Recurse | ForEach-Object { $files += $_.FullName }
+          ./scripts/sign-artifacts.ps1 `
+            -Files $files `
+            -CertificatePath "$env:SIGNING_CERT_PATH" `
+            -CertificatePassword "${{ secrets.SIGNING_CERT_PASSWORD }}"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: publish/win-x64/PictureTool.exe
+          files: |
+            publish/win-x64/PictureTool.exe
+            publish/msix/${{ steps.version.outputs.msix_file }}
+            publish/msix/PictureTool.appinstaller
+            publish/squirrel/releases/RELEASES
+            publish/squirrel/releases/*.nupkg
+            publish/squirrel/releases/*Setup*.exe
           generate_release_notes: true
           draft: false
           prerelease: false

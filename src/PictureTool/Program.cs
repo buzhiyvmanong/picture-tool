@@ -1,6 +1,6 @@
-using System.IO;
 using System.Windows;
 using PictureTool.Infrastructure;
+using PictureTool.Services;
 
 namespace PictureTool;
 
@@ -11,6 +11,8 @@ public static class Program
     {
         try
         {
+            SquirrelLifecycleService.HandleStartupEvents();
+
             if (!RuntimeGuard.TryEnsureReady(out var error))
             {
                 RuntimeGuard.ShowFatal(error);

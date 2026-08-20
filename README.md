@@ -4,9 +4,23 @@
 
 ## 下载使用
 
+Picture Tool 提供两种安装方式：
+
+### 便携版（EXE）
+
 1. 前往 [Releases](https://github.com/buzhiyvmanong/picture-tool/releases/latest) 下载 `PictureTool.exe`（约 25MB）
 2. 安装 [.NET 10 桌面运行时](https://dotnet.microsoft.com/download/dotnet/10.0)（首次使用需要，一次性安装）
 3. 双击 `PictureTool.exe` 即可运行，启动后常驻系统托盘
+
+### 安装版（Squirrel / MSIX）
+
+| 方式 | 文件 | 特点 |
+|------|------|------|
+| **Squirrel 安装版** | `PictureTool Setup.exe` | 安装后支持应用内自动下载并安装更新 |
+| **MSIX 安装版** | `PictureTool.appinstaller` | 首次安装后，Windows 可按 AppInstaller 策略自动检查更新 |
+
+> Squirrel 安装版：下载 Release 中的 `PictureTool Setup.exe` 运行安装。  
+> MSIX 安装版：下载 `PictureTool.appinstaller`，双击完成首次安装。
 
 > 未安装 .NET 时，Windows 会提示安装运行时；程序启动后也会检测 Windows 版本是否满足要求。
 
@@ -129,23 +143,40 @@ dotnet run --project .\src\PictureTool\PictureTool.csproj
 本地一键构建：
 
 ```powershell
+# 仅便携 EXE
 .\build.ps1
+
+# 便携 EXE + Squirrel 安装包 + MSIX
+.\build.ps1 -BuildSquirrel -PackageMsix
+
+# 构建并签名（需证书）
+.\build.ps1 -BuildSquirrel -PackageMsix -Sign -CertificatePath "cert.pfx" -CertificatePassword "pwd"
 ```
 
-输出：`publish\win-x64\PictureTool.exe`（约 25MB，依赖 .NET 10 桌面运行时）。
+输出目录：
 
-代码签名说明见 [docs/SIGNING.md](docs/SIGNING.md)。
+| 路径 | 内容 |
+|------|------|
+| `publish\win-x64\PictureTool.exe` | 便携版单文件 EXE |
+| `publish\squirrel\releases\` | Squirrel 更新包（`RELEASES`、`*.nupkg`、Setup.exe） |
+| `publish\msix\` | MSIX 安装包与 AppInstaller |
+
+代码签名与 CI 自动签名说明见 [docs/SIGNING.md](docs/SIGNING.md)。
 
 ### 自动发布
 
 推送版本标签后会自动构建并发布到 GitHub Releases：
 
 ```powershell
-git tag v1.0.1
-git push origin v1.0.1
+git tag v1.0.7
+git push origin v1.0.7
 ```
 
-CI 会先跑单元测试，再发布 `PictureTool.exe` 到对应 Release 页面。
+CI 会先跑单元测试，再发布以下资产：
+
+- `PictureTool.exe`（便携版）
+- `PictureTool Setup.exe` + `RELEASES` + `*.nupkg`（Squirrel 自动更新）
+- `PictureTool_*.msix` + `PictureTool.appinstaller`（MSIX 安装与更新）
 
 ## 运行测试
 

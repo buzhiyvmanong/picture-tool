@@ -2,6 +2,14 @@
 
 All notable changes to PictureTool are documented in this file.
 
+## [1.0.7] - 2026-08-20
+
+### Added
+- Squirrel-based auto-update for installed clients (download, apply, restart prompt)
+- MSIX package and AppInstaller distribution channel
+- CI automatic signing for EXE, MSIX, and Squirrel artifacts via GitHub Secrets
+- Release scripts: `scripts/build-squirrel.ps1`, `scripts/build-msix.ps1`, `scripts/sign-artifacts.ps1`
+
 ## [1.0.6] - 2026-08-20
 
 ### Changed

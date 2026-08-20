@@ -8,7 +8,7 @@
     <AssemblyName>PictureTool</AssemblyName>
     <StartupObject>PictureTool.Program</StartupObject>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
-    <Version>1.0.6</Version>
+    <Version>1.0.7</Version>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RollForward>LatestMinor</RollForward>
   </PropertyGroup>
@@ -19,6 +19,10 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="PictureTool.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Clowd.Squirrel" Version="2.11.1" />
   </ItemGroup>
 </Project>
 

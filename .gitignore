@@ -17,6 +17,7 @@ obj/
 .codex/
 .agents/
 .local/
+.tools/
 
 # Logs and temporary files
 *.log
