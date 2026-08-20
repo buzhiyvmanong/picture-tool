@@ -1,6 +1,14 @@
 # Picture Tool
 
-一个低内存优先的 Windows 截图、标注、贴图工具原型。
+一个低内存优先的 Windows 截图、标注、贴图工具。
+
+## 下载使用
+
+1. 前往 [Releases](https://github.com/buzhiyvmanong/picture-tool/releases/latest) 下载 `PictureTool.exe`（约 25MB）
+2. 安装 [.NET 10 桌面运行时](https://dotnet.microsoft.com/download/dotnet/10.0)（首次使用需要，一次性安装）
+3. 双击 `PictureTool.exe` 即可运行，启动后常驻系统托盘
+
+> 未安装 .NET 时，Windows 会提示安装运行时；程序启动后也会检测 Windows 版本是否满足要求。
 
 ## 技术路线
 
@@ -118,13 +126,24 @@ dotnet run --project .\src\PictureTool\PictureTool.csproj
 
 ## 构建发布
 
-一键构建独立可执行文件：
+本地一键构建：
 
 ```powershell
 .\build.ps1
 ```
 
-生成的 `publish\win-x64\PictureTool.exe` 是单文件独立程序，双击即可运行，无需安装 .NET 运行时。
+输出：`publish\win-x64\PictureTool.exe`（约 25MB，依赖 .NET 10 桌面运行时）。
+
+### 自动发布
+
+推送版本标签后会自动构建并发布到 GitHub Releases：
+
+```powershell
+git tag v1.0.1
+git push origin v1.0.1
+```
+
+CI 会先跑单元测试，再发布 `PictureTool.exe` 到对应 Release 页面。
 
 ## 运行测试
 

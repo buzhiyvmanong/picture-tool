@@ -6,7 +6,9 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>PictureTool</AssemblyName>
+    <StartupObject>PictureTool.Program</StartupObject>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RollForward>LatestMinor</RollForward>
   </PropertyGroup>
 
   <ItemGroup>
