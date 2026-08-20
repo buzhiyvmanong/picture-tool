@@ -17,6 +17,7 @@ public sealed class AppCoordinator : IDisposable
     private TrayService? _tray;
     private HotkeyService? _hotkeys;
     private readonly List<PinWindow> _pins = new();
+    private readonly UpdateCheckService _updateChecker = new();
 
     public AppCoordinator(Dispatcher dispatcher)
     {
@@ -29,6 +30,7 @@ public sealed class AppCoordinator : IDisposable
         _settings = _settingsService.Load();
         _mainWindow = new MainWindow(this);
         _mainWindow.ApplyPlacement(_settings.MainWindowPlacement);
+        _mainWindow.Title = $"Picture Tool v{_updateChecker.CurrentVersion}";
         _hotkeys = new HotkeyService(_mainWindow);
         _mainWindow.Show();
         _mainWindow.SetHotkeySummary(_settings.Hotkeys);
@@ -45,8 +47,66 @@ public sealed class AppCoordinator : IDisposable
             exit: Shutdown);
 
         ApplyHotkeys();
+        ShowWelcomeIfNeeded();
         _mainWindow.Hide();
         MemoryPressureService.TrimSoon(1000);
+        _ = CheckForUpdatesAsync();
+    }
+
+    private void ShowWelcomeIfNeeded()
+    {
+        if (_settings.HasSeenWelcome || _mainWindow is null)
+        {
+            return;
+        }
+
+        var welcome = new WelcomeWindow(_settings.Hotkeys)
+        {
+            Owner = _mainWindow
+        };
+        welcome.ShowDialog();
+        _settings.HasSeenWelcome = true;
+        _settingsService.Save(_settings);
+    }
+
+    private async Task CheckForUpdatesAsync()
+    {
+        var result = await _updateChecker.CheckAsync().ConfigureAwait(false);
+        if (result.Status != UpdateCheckStatus.UpdateAvailable || result.LatestVersion is null)
+        {
+            return;
+        }
+
+        if (string.Equals(_settings.LastDismissedUpdateVersion, result.LatestVersion, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        await _dispatcher.InvokeAsync(() =>
+        {
+            if (_mainWindow is null)
+            {
+                return;
+            }
+
+            var answer = System.Windows.MessageBox.Show(
+                _mainWindow,
+                $"发现新版本 v{result.LatestVersion}（当前 v{result.CurrentVersion}）。\n是否打开下载页面？",
+                "检查更新",
+                System.Windows.MessageBoxButton.YesNoCancel,
+                System.Windows.MessageBoxImage.Information);
+
+            if (answer == System.Windows.MessageBoxResult.Yes && !string.IsNullOrWhiteSpace(result.DownloadUrl))
+            {
+                UpdateCheckService.OpenDownloadPage(result.DownloadUrl);
+            }
+
+            if (answer is System.Windows.MessageBoxResult.Yes or System.Windows.MessageBoxResult.No)
+            {
+                _settings.LastDismissedUpdateVersion = result.LatestVersion;
+                _settingsService.Save(_settings);
+            }
+        });
     }
 
     public void ShowDashboard()

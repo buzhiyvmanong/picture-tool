@@ -33,7 +33,7 @@ public sealed class TrayService : IDisposable
 
         _icon = new Forms.NotifyIcon
         {
-            Icon = SystemIcons.Application,
+            Icon = AppIconHelper.GetTrayIcon(),
             Text = "Picture Tool",
             ContextMenuStrip = menu,
             Visible = true

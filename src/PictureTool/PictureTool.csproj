@@ -7,9 +7,15 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>PictureTool</AssemblyName>
     <StartupObject>PictureTool.Program</StartupObject>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+    <Version>1.0.2</Version>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RollForward>LatestMinor</RollForward>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\app.ico" />
+  </ItemGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="PictureTool.Tests" />

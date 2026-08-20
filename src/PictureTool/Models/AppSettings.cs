@@ -6,12 +6,18 @@ public sealed class AppSettings
 
     public WindowPlacement? MainWindowPlacement { get; set; }
 
+    public bool HasSeenWelcome { get; set; }
+
+    public string? LastDismissedUpdateVersion { get; set; }
+
     public AppSettings Clone()
     {
         return new AppSettings
         {
             Hotkeys = Hotkeys.Clone(),
-            MainWindowPlacement = MainWindowPlacement?.Clone()
+            MainWindowPlacement = MainWindowPlacement?.Clone(),
+            HasSeenWelcome = HasSeenWelcome,
+            LastDismissedUpdateVersion = LastDismissedUpdateVersion
         };
     }
 }
