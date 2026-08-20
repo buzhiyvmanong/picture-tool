@@ -86,7 +86,7 @@ public sealed class HotkeyService : IDisposable
         }
 
         var error = Marshal.GetLastWin32Error();
-        failures.Add($"{name}快捷键 {gesture} 注册失败，可能已被其他程序占用。错误码：{error}");
+        failures.Add(HotkeyConflictAdvisor.DescribeRegistrationFailure(name, gesture, error));
     }
 
     private static uint ToNativeModifiers(HotkeyModifiers modifiers)

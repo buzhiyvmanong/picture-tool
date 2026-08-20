@@ -186,6 +186,7 @@ public partial class AnnotationWindow : Window
     private void CopyCurrent()
     {
         WpfClipboard.SetImage(RenderCurrentBitmap());
+        TrayNotificationService.Show("已复制", "图片已复制到剪贴板");
         MemoryPressureService.TrimSoon();
     }
 
@@ -193,8 +194,8 @@ public partial class AnnotationWindow : Window
     {
         var dialog = new SaveFileDialog
         {
-            Filter = "PNG 图片|*.png",
-            FileName = $"picture-tool-{DateTime.Now:yyyyMMdd-HHmmss}.png"
+            Filter = ImageExportService.SaveFilter,
+            FileName = ImageExportService.DefaultFileName()
         };
 
         if (dialog.ShowDialog(this) != true)
@@ -202,10 +203,8 @@ public partial class AnnotationWindow : Window
             return;
         }
 
-        using var stream = IoFile.Create(dialog.FileName);
-        var encoder = new PngBitmapEncoder();
-        encoder.Frames.Add(BitmapFrame.Create(RenderCurrentBitmap()));
-        encoder.Save(stream);
+        ImageExportService.Save(dialog.FileName, RenderCurrentBitmap());
+        TrayNotificationService.Show("已保存", System.IO.Path.GetFileName(dialog.FileName));
         MemoryPressureService.TrimSoon();
     }
 

@@ -9,14 +9,21 @@ public sealed class HistoryService
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "PictureTool", "history");
 
-    private const int MaxItems = 50;
+    private int _maxItems = 50;
 
     public ObservableCollection<HistoryItem> Items { get; } = new();
 
-    public HistoryService()
+    public HistoryService(int maxItems = 50)
     {
+        _maxItems = Math.Clamp(maxItems, 5, 200);
         Directory.CreateDirectory(HistoryDir);
         LoadExisting();
+    }
+
+    public void ConfigureMaxItems(int maxItems)
+    {
+        _maxItems = Math.Clamp(maxItems, 5, 200);
+        TrimOverflow();
     }
 
     public void Add(string sourcePath)
@@ -35,13 +42,7 @@ public sealed class HistoryService
         }
 
         Items.Insert(0, new HistoryItem(destPath, timestamp));
-
-        while (Items.Count > MaxItems)
-        {
-            var removed = Items[^1];
-            Items.RemoveAt(Items.Count - 1);
-            TryDeleteFile(removed.FilePath);
-        }
+        TrimOverflow();
     }
 
     public void Remove(HistoryItem item)
@@ -64,11 +65,21 @@ public sealed class HistoryService
     {
         var files = Directory.GetFiles(HistoryDir, "*.png")
             .OrderByDescending(f => File.GetCreationTime(f))
-            .Take(MaxItems);
+            .Take(_maxItems);
 
         foreach (var file in files)
         {
             Items.Add(new HistoryItem(file, File.GetCreationTime(file)));
+        }
+    }
+
+    private void TrimOverflow()
+    {
+        while (Items.Count > _maxItems)
+        {
+            var removed = Items[^1];
+            Items.RemoveAt(Items.Count - 1);
+            TryDeleteFile(removed.FilePath);
         }
     }
 

@@ -7,6 +7,7 @@ public sealed class GlobalWheelHook : IDisposable
 {
     private const int WhMouseLl = 14;
     private const int WmMouseWheel = 0x020A;
+    private const int WmMouseHWheel = 0x020E;
 
     private readonly LowLevelMouseProc _proc;
     private IntPtr _hookId = IntPtr.Zero;
@@ -17,7 +18,7 @@ public sealed class GlobalWheelHook : IDisposable
         _proc = HookCallback;
     }
 
-    public event Action<int, DrawingPoint>? WheelScrolled;
+    public event Action<int, DrawingPoint, bool>? WheelScrolled;
 
     public void Install()
     {
@@ -50,11 +51,20 @@ public sealed class GlobalWheelHook : IDisposable
 
     private IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
     {
-        if (nCode >= 0 && wParam == (IntPtr)WmMouseWheel)
+        if (nCode >= 0)
         {
-            var info = Marshal.PtrToStructure<MouseLowLevelHookStruct>(lParam);
-            var delta = (short)((info.MouseData >> 16) & 0xFFFF);
-            WheelScrolled?.Invoke(delta, new DrawingPoint(info.Point.X, info.Point.Y));
+            if (wParam == (IntPtr)WmMouseWheel)
+            {
+                var info = Marshal.PtrToStructure<MouseLowLevelHookStruct>(lParam);
+                var delta = (short)((info.MouseData >> 16) & 0xFFFF);
+                WheelScrolled?.Invoke(delta, new DrawingPoint(info.Point.X, info.Point.Y), false);
+            }
+            else if (wParam == (IntPtr)WmMouseHWheel)
+            {
+                var info = Marshal.PtrToStructure<MouseLowLevelHookStruct>(lParam);
+                var delta = (short)((info.MouseData >> 16) & 0xFFFF);
+                WheelScrolled?.Invoke(delta, new DrawingPoint(info.Point.X, info.Point.Y), true);
+            }
         }
 
         return CallNextHookEx(_hookId, nCode, wParam, lParam);

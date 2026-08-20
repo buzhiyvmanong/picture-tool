@@ -24,7 +24,7 @@
 - 截图：`Ctrl + Shift + A`
 - 贴图：`Ctrl + Shift + V`
 
-主窗口和托盘菜单都提供“快捷键设置”入口。配置会保存到：
+主窗口和托盘菜单都提供「设置」入口。配置会保存到：
 
 ```text
 %APPDATA%\PictureTool\settings.json
@@ -133,6 +133,8 @@ dotnet run --project .\src\PictureTool\PictureTool.csproj
 ```
 
 输出：`publish\win-x64\PictureTool.exe`（约 25MB，依赖 .NET 10 桌面运行时）。
+
+代码签名说明见 [docs/SIGNING.md](docs/SIGNING.md)。
 
 ### 自动发布
 

@@ -10,6 +10,12 @@ public sealed class AppSettings
 
     public string? LastDismissedUpdateVersion { get; set; }
 
+    public bool StartWithWindows { get; set; }
+
+    public bool CheckUpdatesOnStartup { get; set; } = true;
+
+    public int HistoryMaxItems { get; set; } = 50;
+
     public AppSettings Clone()
     {
         return new AppSettings
@@ -17,7 +23,10 @@ public sealed class AppSettings
             Hotkeys = Hotkeys.Clone(),
             MainWindowPlacement = MainWindowPlacement?.Clone(),
             HasSeenWelcome = HasSeenWelcome,
-            LastDismissedUpdateVersion = LastDismissedUpdateVersion
+            LastDismissedUpdateVersion = LastDismissedUpdateVersion,
+            StartWithWindows = StartWithWindows,
+            CheckUpdatesOnStartup = CheckUpdatesOnStartup,
+            HistoryMaxItems = HistoryMaxItems
         };
     }
 }

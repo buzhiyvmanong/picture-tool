@@ -1,0 +1,43 @@
+# Changelog
+
+All notable changes to PictureTool are documented in this file.
+
+## [1.0.4] - 2026-08-20
+
+### Added
+- Optional Authenticode signing in `build.ps1` (see `docs/SIGNING.md`)
+- Tray balloon notifications for copy/save/capture completion
+- Hotkey conflict detection with alternative suggestions
+- Settings: startup with Windows, update check toggle, history max items
+- Export formats: PNG, JPEG, WebP
+- Scroll capture directions: up, down, left, right
+- CHANGELOG and GitHub Issue templates
+
+### Fixed
+- Startup crash when window icon path was invalid (v1.0.3)
+
+## [1.0.3] - 2026-08-20
+
+### Fixed
+- Fix startup crash caused by invalid MainWindow icon resource path
+
+## [1.0.2] - 2026-08-20
+
+### Added
+- App icon for exe, tray, and windows
+- First-run welcome guide
+- Startup update check against GitHub Releases
+
+## [1.0.1] - 2026-08-20
+
+### Added
+- GitHub Actions automated release workflow
+- Runtime guard with Chinese error messages
+- README download instructions
+
+## [1.0.0] - 2026-08-20
+
+### Added
+- Area capture, scroll capture, annotation, pin-to-screen
+- OCR text extraction, capture history
+- Global hotkeys and system tray integration

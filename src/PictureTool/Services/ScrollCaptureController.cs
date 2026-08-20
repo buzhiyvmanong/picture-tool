@@ -51,12 +51,19 @@ public sealed class ScrollCaptureController : IDisposable
         int wheelDelta,
         DrawingPoint screenPoint,
         DrawingRectangle scrollRegion,
+        ScrollCaptureDirection direction,
+        bool isHorizontalWheel,
         bool isBusy,
         bool isAutoScrolling,
         bool isAutoScrollPaused,
         Func<DrawingPoint, bool> isInsideChrome)
     {
-        if (wheelDelta == 0 || !ContainsScreenPoint(scrollRegion, screenPoint))
+        if (wheelDelta == 0 || direction.IsHorizontal() != isHorizontalWheel)
+        {
+            return false;
+        }
+
+        if (!ContainsScreenPoint(scrollRegion, screenPoint))
         {
             return false;
         }
@@ -125,12 +132,12 @@ public sealed class ScrollCaptureController : IDisposable
         }
     }
 
-    private void OnWheelScrolled(int wheelDelta, DrawingPoint screenPoint)
+    private void OnWheelScrolled(int wheelDelta, DrawingPoint screenPoint, bool isHorizontal)
     {
-        WheelScrolled?.Invoke(wheelDelta, screenPoint);
+        WheelScrolled?.Invoke(wheelDelta, screenPoint, isHorizontal);
     }
 
-    public event Action<int, DrawingPoint>? WheelScrolled;
+    public event Action<int, DrawingPoint, bool>? WheelScrolled;
 
     private static bool ContainsScreenPoint(DrawingRectangle region, DrawingPoint point)
     {

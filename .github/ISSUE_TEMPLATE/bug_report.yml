@@ -1,0 +1,51 @@
+name: Bug Report
+description: Report a bug or unexpected behavior
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for taking the time to report a bug.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      placeholder: e.g. 1.0.4
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Windows version
+      options:
+        - Windows 11
+        - Windows 10
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open PictureTool
+        2. Click ...
+        3. See error
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Additional context
+      description: Logs, screenshots, or .NET runtime version if relevant

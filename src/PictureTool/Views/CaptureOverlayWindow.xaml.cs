@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Runtime.InteropServices;
+using IoPath = System.IO.Path;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Ink;
@@ -95,10 +96,12 @@ public partial class CaptureOverlayWindow : Window
     private bool _isAutoScrollPaused;
     private bool _isCompleting;
     private bool _scrollPassThroughActive;
+    private ScrollCaptureDirection _scrollDirection = ScrollCaptureDirection.VerticalDown;
 
     public event EventHandler<string>? PinRequested;
     public event EventHandler<string>? ScrollCaptureCompleted;
     public event EventHandler<string>? CaptureCompleted;
+    public event EventHandler? CopyCompleted;
     public event EventHandler? CaptureCanceled;
 
     private BitmapSource SourceBitmap =>
@@ -257,6 +260,11 @@ public partial class CaptureOverlayWindow : Window
     private async void RootCanvas_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
     {
         if (!_isScrollSessionActive || _scrollController is null || _scrollSession is null)
+        {
+            return;
+        }
+
+        if (_scrollDirection.IsHorizontal())
         {
             return;
         }
@@ -508,6 +516,45 @@ public partial class CaptureOverlayWindow : Window
     private void ScreenshotMode_Click(object sender, RoutedEventArgs e) => SetCaptureMode(CaptureMode.Screenshot);
 
     private void ScrollMode_Click(object sender, RoutedEventArgs e) => SetCaptureMode(CaptureMode.Scroll);
+
+    private void ScrollDirectionDown_Click(object sender, RoutedEventArgs e) =>
+        SetScrollDirection(ScrollCaptureDirection.VerticalDown);
+
+    private void ScrollDirectionUp_Click(object sender, RoutedEventArgs e) =>
+        SetScrollDirection(ScrollCaptureDirection.VerticalUp);
+
+    private void ScrollDirectionRight_Click(object sender, RoutedEventArgs e) =>
+        SetScrollDirection(ScrollCaptureDirection.HorizontalRight);
+
+    private void ScrollDirectionLeft_Click(object sender, RoutedEventArgs e) =>
+        SetScrollDirection(ScrollCaptureDirection.HorizontalLeft);
+
+    private void SetScrollDirection(ScrollCaptureDirection direction)
+    {
+        if (_scrollSession is { FrameCount: > 1 })
+        {
+            ShowManualScrollWarning("已开始拼接，无法切换滚动方向。", "切换方向");
+            return;
+        }
+
+        _scrollDirection = direction;
+        UpdateScrollDirectionButtons();
+        AutoScrollButton.ToolTip = $"自动{_scrollDirection.GetDisplayName()}滚动";
+    }
+
+    private void UpdateScrollDirectionButtons()
+    {
+        SetDirectionButtonState(ScrollDirectionDownButton, ScrollCaptureDirection.VerticalDown);
+        SetDirectionButtonState(ScrollDirectionUpButton, ScrollCaptureDirection.VerticalUp);
+        SetDirectionButtonState(ScrollDirectionRightButton, ScrollCaptureDirection.HorizontalRight);
+        SetDirectionButtonState(ScrollDirectionLeftButton, ScrollCaptureDirection.HorizontalLeft);
+    }
+
+    private void SetDirectionButtonState(WpfButton button, ScrollCaptureDirection direction)
+    {
+        button.Opacity = _scrollDirection == direction ? 1.0 : 0.55;
+        button.IsEnabled = _scrollSession is null or { FrameCount: <= 1 };
+    }
 
     private void Color_Click(object sender, RoutedEventArgs e)
     {
@@ -1067,7 +1114,7 @@ public partial class CaptureOverlayWindow : Window
         SetScrollBusy(true, "准备中...");
         try
         {
-            _scrollSession = await RunWithOverlayHiddenAsync(() => _scrollCaptures.StartSession(_scrollRegion));
+            _scrollSession = await RunWithOverlayHiddenAsync(() => _scrollCaptures.StartSession(_scrollRegion, _scrollDirection));
             var previewPath = await Task.Run(() => _scrollSession.CreatePreview());
             UpdateScrollPreview(previewPath);
 
@@ -1117,7 +1164,7 @@ public partial class CaptureOverlayWindow : Window
         _scrollWarningActive = false;
     }
 
-    private void OnControllerWheelScrolled(int wheelDelta, DrawingPoint screenPoint)
+    private void OnControllerWheelScrolled(int wheelDelta, DrawingPoint screenPoint, bool isHorizontal)
     {
         Dispatcher.BeginInvoke(() =>
         {
@@ -1126,16 +1173,32 @@ public partial class CaptureOverlayWindow : Window
                 return;
             }
 
-            _scrollController.TryHandleWheel(
-                wheelDelta,
-                screenPoint,
-                _scrollRegion,
-                _isScrollBusy,
-                _isAutoScrolling,
-                _isAutoScrollPaused,
-                IsPointInsideScrollChrome);
+            if (_scrollController.TryHandleWheel(
+                    wheelDelta,
+                    screenPoint,
+                    _scrollRegion,
+                    _scrollDirection,
+                    isHorizontal,
+                    _isScrollBusy,
+                    _isAutoScrolling,
+                    _isAutoScrollPaused,
+                    IsPointInsideScrollChrome))
+            {
+                return;
+            }
+
+            if (_scrollDirection.IsHorizontal() == isHorizontal
+                && ContainsScreenPoint(_scrollRegion, screenPoint)
+                && !_isScrollBusy
+                && !(_isAutoScrolling && !_isAutoScrollPaused))
+            {
+                _ = RunManualScrollCaptureAsync(wheelDelta, screenPoint);
+            }
         });
     }
+
+    private static bool ContainsScreenPoint(DrawingRectangle region, DrawingPoint point) =>
+        point.X >= region.Left && point.X < region.Right && point.Y >= region.Top && point.Y < region.Bottom;
 
     private void ReleaseFullscreenBitmap()
     {
@@ -1322,7 +1385,7 @@ public partial class CaptureOverlayWindow : Window
         try
         {
             return await RunWithoutOverlayInputTransparentAsync(() =>
-                session.CaptureAutoStep(AutoScrollWheelDelta, AutoScrollFrameDelayMs, createPreview: true));
+                session.CaptureAutoStep(_scrollDirection.GetAutoWheelDelta(), AutoScrollFrameDelayMs, createPreview: true));
         }
         finally
         {
@@ -1371,8 +1434,8 @@ public partial class CaptureOverlayWindow : Window
 
         var dialog = new SaveFileDialog
         {
-            Filter = "PNG 图片|*.png",
-            FileName = $"picture-tool-scroll-{DateTime.Now:yyyyMMdd-HHmmss}.png"
+            Filter = ImageExportService.SaveFilter,
+            FileName = ImageExportService.DefaultFileName("picture-tool-scroll")
         };
 
         if (dialog.ShowDialog(this) != true)
@@ -1412,6 +1475,7 @@ public partial class CaptureOverlayWindow : Window
             {
                 WpfClipboard.SetImage(BitmapLoader.LoadFrozen(outputPath));
                 TempImageStore.TryDelete(outputPath);
+                CopyCompleted?.Invoke(this, EventArgs.Empty);
             }
 
             Close();
@@ -1491,8 +1555,9 @@ public partial class CaptureOverlayWindow : Window
             : "自动滚动");
         AutoScrollButton.ToolTip = _isAutoScrolling
             ? (_isAutoScrollPaused ? "继续自动滚动" : "暂停自动滚动")
-            : "自动滚动";
+            : $"自动{_scrollDirection.GetDisplayName()}滚动";
         UpdateScrollButtonStates();
+        UpdateScrollDirectionButtons();
         PositionScrollToolbar();
     }
 
@@ -2385,8 +2450,8 @@ public partial class CaptureOverlayWindow : Window
 
         var dialog = new SaveFileDialog
         {
-            Filter = "PNG 图片|*.png",
-            FileName = $"picture-tool-{DateTime.Now:yyyyMMdd-HHmmss}.png"
+            Filter = ImageExportService.SaveFilter,
+            FileName = ImageExportService.DefaultFileName()
         };
 
         if (dialog.ShowDialog(this) != true)
@@ -2394,7 +2459,8 @@ public partial class CaptureOverlayWindow : Window
             return;
         }
 
-        SaveBitmap(dialog.FileName, RenderSelectedBitmap());
+        ImageExportService.Save(dialog.FileName, RenderSelectedBitmap());
+        TrayNotificationService.Show("已保存", IoPath.GetFileName(dialog.FileName));
         CompleteAndClose();
     }
 
@@ -2408,6 +2474,7 @@ public partial class CaptureOverlayWindow : Window
         var tempPath = SaveSelectedToTemp();
         WpfClipboard.SetImage(BitmapLoader.LoadFrozen(tempPath));
         CaptureCompleted?.Invoke(this, tempPath);
+        CopyCompleted?.Invoke(this, EventArgs.Empty);
         CompleteAndClose();
     }
 
@@ -2608,13 +2675,8 @@ public partial class CaptureOverlayWindow : Window
         return IntPtr.Zero;
     }
 
-    private static void SaveBitmap(string path, BitmapSource bitmap)
-    {
-        using var stream = IoFile.Create(path);
-        var encoder = new PngBitmapEncoder();
-        encoder.Frames.Add(BitmapFrame.Create(bitmap));
-        encoder.Save(stream);
-    }
+    private static void SaveBitmap(string path, BitmapSource bitmap) =>
+        ImageExportService.Save(path, bitmap);
 
     private Stroke CreateRectangleStroke(WpfRect bounds)
     {

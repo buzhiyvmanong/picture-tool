@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Windows;
 using System.Windows.Input;
 using PictureTool.Models;
@@ -7,43 +8,52 @@ namespace PictureTool.Views;
 
 public partial class SettingsWindow : Window
 {
-    public SettingsWindow(HotkeySettings hotkeys)
+    public SettingsWindow(AppSettings settings)
     {
-        Hotkeys = hotkeys.Clone();
+        Settings = settings.Clone();
         InitializeComponent();
         UpdateHotkeyText();
+        StartWithWindowsCheckBox.IsChecked = Settings.StartWithWindows;
+        CheckUpdatesCheckBox.IsChecked = Settings.CheckUpdatesOnStartup;
+        HistoryMaxItemsBox.Text = Settings.HistoryMaxItems.ToString(CultureInfo.InvariantCulture);
     }
 
-    public HotkeySettings Hotkeys { get; private set; }
+    public AppSettings Settings { get; private set; }
 
     private void CaptureAreaHotkeyBox_PreviewKeyDown(object sender, WpfKeyEventArgs e)
     {
         e.Handled = true;
-        TrySetHotkey(e, gesture => Hotkeys.CaptureArea = gesture);
+        TrySetHotkey(e, gesture => Settings.Hotkeys.CaptureArea = gesture);
     }
 
     private void PasteImageHotkeyBox_PreviewKeyDown(object sender, WpfKeyEventArgs e)
     {
         e.Handled = true;
-        TrySetHotkey(e, gesture => Hotkeys.PasteImage = gesture);
+        TrySetHotkey(e, gesture => Settings.Hotkeys.PasteImage = gesture);
     }
 
     private void Reset_Click(object sender, RoutedEventArgs e)
     {
-        Hotkeys = HotkeySettings.CreateDefault();
-        StatusText.Text = "已恢复默认快捷键。";
+        Settings = new AppSettings();
+        StatusText.Text = "已恢复默认设置。";
         UpdateHotkeyText();
+        StartWithWindowsCheckBox.IsChecked = Settings.StartWithWindows;
+        CheckUpdatesCheckBox.IsChecked = Settings.CheckUpdatesOnStartup;
+        HistoryMaxItemsBox.Text = Settings.HistoryMaxItems.ToString(CultureInfo.InvariantCulture);
     }
 
     private void Save_Click(object sender, RoutedEventArgs e)
     {
-        var error = ValidateHotkeys();
+        var error = ValidateSettings();
         if (error is not null)
         {
             StatusText.Text = error;
             return;
         }
 
+        Settings.StartWithWindows = StartWithWindowsCheckBox.IsChecked == true;
+        Settings.CheckUpdatesOnStartup = CheckUpdatesCheckBox.IsChecked == true;
+        Settings.HistoryMaxItems = int.Parse(HistoryMaxItemsBox.Text.Trim(), CultureInfo.InvariantCulture);
         DialogResult = true;
         Close();
     }
@@ -69,21 +79,27 @@ public partial class SettingsWindow : Window
         UpdateHotkeyText();
     }
 
-    private string? ValidateHotkeys()
+    private string? ValidateSettings()
     {
-        if (!Hotkeys.CaptureArea.IsValidGlobalHotkey)
+        if (!Settings.Hotkeys.CaptureArea.IsValidGlobalHotkey)
         {
             return "区域截图快捷键无效。";
         }
 
-        if (!Hotkeys.PasteImage.IsValidGlobalHotkey)
+        if (!Settings.Hotkeys.PasteImage.IsValidGlobalHotkey)
         {
             return "粘贴图片快捷键无效。";
         }
 
-        if (Hotkeys.CaptureArea.Equals(Hotkeys.PasteImage))
+        if (Settings.Hotkeys.CaptureArea.Equals(Settings.Hotkeys.PasteImage))
         {
             return "两个功能不能使用同一个快捷键。";
+        }
+
+        if (!int.TryParse(HistoryMaxItemsBox.Text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var maxItems)
+            || maxItems is < 5 or > 200)
+        {
+            return "历史记录上限需在 5 到 200 之间。";
         }
 
         return null;
@@ -91,8 +107,8 @@ public partial class SettingsWindow : Window
 
     private void UpdateHotkeyText()
     {
-        CaptureAreaHotkeyBox.Text = Hotkeys.CaptureArea.ToString();
-        PasteImageHotkeyBox.Text = Hotkeys.PasteImage.ToString();
+        CaptureAreaHotkeyBox.Text = Settings.Hotkeys.CaptureArea.ToString();
+        PasteImageHotkeyBox.Text = Settings.Hotkeys.PasteImage.ToString();
     }
 
     private static Key ResolveKey(WpfKeyEventArgs e)

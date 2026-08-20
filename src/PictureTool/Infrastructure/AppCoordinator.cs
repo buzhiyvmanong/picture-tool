@@ -12,7 +12,8 @@ public sealed class AppCoordinator : IDisposable
     private readonly ClipboardImageService _clipboard = new();
     private readonly SettingsService _settingsService = new();
     private AppSettings _settings = new();
-    public HistoryService History { get; } = new();
+    private HistoryService _history = null!;
+    public HistoryService History => _history;
     private MainWindow? _mainWindow;
     private TrayService? _tray;
     private HotkeyService? _hotkeys;
@@ -28,6 +29,8 @@ public sealed class AppCoordinator : IDisposable
     {
         TempImageStore.CleanupStale(TimeSpan.FromHours(6));
         _settings = _settingsService.Load();
+        _history = new HistoryService(_settings.HistoryMaxItems);
+        ApplyStartupSetting();
         _mainWindow = new MainWindow(this);
         _mainWindow.ApplyPlacement(_settings.MainWindowPlacement);
         _mainWindow.Title = $"Picture Tool v{_updateChecker.CurrentVersion}";
@@ -46,6 +49,7 @@ public sealed class AppCoordinator : IDisposable
             closeAllPins: CloseAllPins,
             exit: Shutdown);
 
+        TrayNotificationService.Initialize((title, message) => _tray.ShowBalloon(title, message));
         ApplyHotkeys();
         ShowWelcomeIfNeeded();
         _mainWindow.Hide();
@@ -71,6 +75,11 @@ public sealed class AppCoordinator : IDisposable
 
     private async Task CheckForUpdatesAsync()
     {
+        if (!_settings.CheckUpdatesOnStartup)
+        {
+            return;
+        }
+
         var result = await _updateChecker.CheckAsync().ConfigureAwait(false);
         if (result.Status != UpdateCheckStatus.UpdateAvailable || result.LatestVersion is null)
         {
@@ -137,9 +146,11 @@ public sealed class AppCoordinator : IDisposable
         var overlay = new CaptureOverlayWindow(frame, startInScrollMode);
 
         overlay.PinRequested += (_, path) => OpenPin(path);
+        overlay.CopyCompleted += (_, _) => TrayNotificationService.Show("已复制", "截图已复制到剪贴板");
         overlay.ScrollCaptureCompleted += (_, path) =>
         {
             History.Add(path);
+            TrayNotificationService.Show("滚动截图完成", "长图已保存到历史记录");
             OpenAnnotation(path);
         };
         overlay.CaptureCompleted += (_, path) => History.Add(path);
@@ -182,7 +193,7 @@ public sealed class AppCoordinator : IDisposable
 
         ShowDashboard();
 
-        var window = new SettingsWindow(_settings.Hotkeys)
+        var window = new SettingsWindow(_settings)
         {
             Owner = _mainWindow
         };
@@ -193,7 +204,8 @@ public sealed class AppCoordinator : IDisposable
         }
 
         var previousHotkeys = _settings.Hotkeys.Clone();
-        _settings.Hotkeys = window.Hotkeys.Clone();
+        var previousStartup = _settings.StartWithWindows;
+        _settings = window.Settings.Clone();
 
         var result = ApplyHotkeys(updateStatus: false);
         if (result.HasFailures)
@@ -201,13 +213,30 @@ public sealed class AppCoordinator : IDisposable
             _settings.Hotkeys = previousHotkeys;
             _mainWindow.SetHotkeySummary(_settings.Hotkeys);
             ApplyHotkeys(updateStatus: false);
-            _mainWindow.SetStatus($"快捷键未保存：{string.Join(" ", result.Failures)}");
+            _mainWindow.SetStatus(string.Join("\n", result.Failures));
             return;
         }
 
+        try
+        {
+            ApplyStartupSetting();
+        }
+        catch (Exception ex)
+        {
+            _settings.StartWithWindows = previousStartup;
+            _mainWindow.SetStatus($"开机自启设置失败：{ex.Message}");
+            return;
+        }
+
+        History.ConfigureMaxItems(_settings.HistoryMaxItems);
         _settingsService.Save(_settings);
         _mainWindow.SetHotkeySummary(_settings.Hotkeys);
-        _mainWindow.SetStatus($"快捷键已保存：{_settings.Hotkeys.CaptureArea} 截图，{_settings.Hotkeys.PasteImage} 粘贴图片。");
+        _mainWindow.SetStatus("设置已保存。");
+    }
+
+    private void ApplyStartupSetting()
+    {
+        StartupService.SetEnabled(_settings.StartWithWindows);
     }
 
     public void OpenAnnotationFromHistory(string imagePath)

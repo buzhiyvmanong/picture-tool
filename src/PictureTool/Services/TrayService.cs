@@ -42,6 +42,13 @@ public sealed class TrayService : IDisposable
         _icon.DoubleClick += (_, _) => showDashboard();
     }
 
+    public void ShowBalloon(string title, string message)
+    {
+        _icon.BalloonTipTitle = title;
+        _icon.BalloonTipText = message;
+        _icon.ShowBalloonTip(3000);
+    }
+
     public void Dispose()
     {
         _icon.Visible = false;
