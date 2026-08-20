@@ -8,6 +8,9 @@ public sealed class AppSettings
 
     public bool HasSeenWelcome { get; set; }
 
+    /// <summary>用户已确认欢迎页的应用版本；与当前版本不一致时再次显示欢迎页。</summary>
+    public string? LastSeenWelcomeVersion { get; set; }
+
     public string? LastDismissedUpdateVersion { get; set; }
 
     public bool StartWithWindows { get; set; }
@@ -23,6 +26,7 @@ public sealed class AppSettings
             Hotkeys = Hotkeys.Clone(),
             MainWindowPlacement = MainWindowPlacement?.Clone(),
             HasSeenWelcome = HasSeenWelcome,
+            LastSeenWelcomeVersion = LastSeenWelcomeVersion,
             LastDismissedUpdateVersion = LastDismissedUpdateVersion,
             StartWithWindows = StartWithWindows,
             CheckUpdatesOnStartup = CheckUpdatesOnStartup,

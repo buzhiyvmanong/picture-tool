@@ -186,7 +186,7 @@
         </TextBlock>
         <CheckBox x:Name="DontShowAgainCheckBox"
                   Margin="0,24,0,0"
-                  Content="下次启动不再显示此欢迎页"
+                  Content="此版本下次启动不再显示欢迎页"
                   IsChecked="True" />
       </StackPanel>
       </Grid>

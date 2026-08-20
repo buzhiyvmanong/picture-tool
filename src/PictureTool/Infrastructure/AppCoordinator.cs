@@ -60,7 +60,7 @@ public sealed class AppCoordinator : IDisposable
 
     private void ShowWelcomeIfNeeded()
     {
-        if (_settings.HasSeenWelcome || _mainWindow is null)
+        if (_mainWindow is null || HasSeenWelcomeForCurrentVersion())
         {
             return;
         }
@@ -69,11 +69,22 @@ public sealed class AppCoordinator : IDisposable
         {
             Owner = _mainWindow
         };
-        if (welcome.ShowDialog() == true && welcome.DontShowAgain)
+        if (welcome.ShowDialog() != true)
         {
+            return;
+        }
+
+        if (welcome.WasSkipped || welcome.DontShowAgain)
+        {
+            _settings.LastSeenWelcomeVersion = _updateChecker.CurrentVersion;
             _settings.HasSeenWelcome = true;
             _settingsService.Save(_settings);
         }
+    }
+
+    private bool HasSeenWelcomeForCurrentVersion()
+    {
+        return !WelcomeGuide.ShouldShow(_settings.LastSeenWelcomeVersion, _updateChecker.CurrentVersion);
     }
 
     public void ShowUsageGuide()

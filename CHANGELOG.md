@@ -2,6 +2,12 @@
 
 All notable changes to PictureTool are documented in this file.
 
+## [1.0.6] - 2026-08-20
+
+### Changed
+- Welcome wizard now reappears on each version upgrade (`LastSeenWelcomeVersion`)
+- Skip or "don't show again" dismisses the guide for the current version only
+
 ## [1.0.5] - 2026-08-20
 
 ### Added

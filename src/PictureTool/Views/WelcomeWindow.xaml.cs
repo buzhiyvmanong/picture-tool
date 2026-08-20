@@ -34,6 +34,8 @@ public partial class WelcomeWindow : Window
 
     public bool DontShowAgain => DontShowAgainCheckBox.IsChecked == true;
 
+    public bool WasSkipped { get; private set; }
+
     private void ShowPage(int index)
     {
         _pageIndex = index;
@@ -86,6 +88,7 @@ public partial class WelcomeWindow : Window
 
     private void Skip_Click(object sender, RoutedEventArgs e)
     {
+        WasSkipped = true;
         DialogResult = true;
         Close();
     }
