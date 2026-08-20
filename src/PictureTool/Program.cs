@@ -21,10 +21,9 @@ public static class Program
             app.InitializeComponent();
             app.Run();
         }
-        catch (Exception ex) when (ex is FileNotFoundException or TypeLoadException or BadImageFormatException)
+        catch (Exception ex)
         {
-            RuntimeGuard.ShowFatal(
-                "缺少必要的运行环境，无法加载程序组件。\n请安装 .NET 10 桌面运行时后重试。");
+            RuntimeGuard.ShowFatal($"启动失败：{ex.Message}");
         }
     }
 }

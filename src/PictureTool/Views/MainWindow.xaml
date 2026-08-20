@@ -6,7 +6,6 @@
         Height="420"
         MinWidth="480"
         MinHeight="350"
-        Icon="Assets/app.ico"
         Background="{StaticResource PanelBrush}">
   <Grid Margin="24">
     <Grid.RowDefinitions>

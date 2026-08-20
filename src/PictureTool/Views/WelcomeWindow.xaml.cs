@@ -1,5 +1,6 @@
 using System.Windows;
 using PictureTool.Models;
+using PictureTool.Services;
 
 namespace PictureTool.Views;
 
@@ -10,12 +11,7 @@ public partial class WelcomeWindow : Window
         InitializeComponent();
         CaptureHotkeyRun.Text = hotkeys.CaptureArea.ToString();
         PasteHotkeyRun.Text = hotkeys.PasteImage.ToString();
-
-        var iconUri = Services.AppIconHelper.GetWindowIconUri();
-        if (iconUri is not null)
-        {
-            Icon = System.Windows.Media.Imaging.BitmapFrame.Create(iconUri);
-        }
+        AppIconHelper.ApplyWindowIcon(this);
     }
 
     private void Start_Click(object sender, RoutedEventArgs e)

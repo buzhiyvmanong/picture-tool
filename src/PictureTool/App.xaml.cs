@@ -11,6 +11,13 @@ public partial class App : System.Windows.Application
     {
         base.OnStartup(e);
 
+        DispatcherUnhandledException += (_, args) =>
+        {
+            RuntimeGuard.ShowFatal($"程序发生错误：{args.Exception.Message}");
+            args.Handled = true;
+            Shutdown(1);
+        };
+
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
         _coordinator = new AppCoordinator(Dispatcher);
         _coordinator.Start();

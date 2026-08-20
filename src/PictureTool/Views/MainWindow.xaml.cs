@@ -16,6 +16,7 @@ public partial class MainWindow : Window
     {
         _coordinator = coordinator;
         InitializeComponent();
+        AppIconHelper.ApplyWindowIcon(this);
         HistoryList.ItemsSource = coordinator.History.Items;
     }
 

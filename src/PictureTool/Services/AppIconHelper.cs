@@ -1,5 +1,6 @@
 using System.Drawing;
-using System.Reflection;
+using System.Windows;
+using System.Windows.Media.Imaging;
 
 namespace PictureTool.Services;
 
@@ -25,23 +26,15 @@ public static class AppIconHelper
             }
         }
 
-        var assemblyPath = Assembly.GetExecutingAssembly().Location;
-        if (!string.IsNullOrWhiteSpace(assemblyPath))
-        {
-            var extracted = Icon.ExtractAssociatedIcon(assemblyPath);
-            if (extracted is not null)
-            {
-                _cached = extracted;
-                return _cached;
-            }
-        }
-
         _cached = SystemIcons.Application;
         return _cached;
     }
 
-    public static Uri? GetWindowIconUri()
+    public static Uri WindowIconUri { get; } =
+        new("pack://application:,,,/Assets/app.ico", UriKind.Absolute);
+
+    public static void ApplyWindowIcon(Window window)
     {
-        return new Uri("pack://application:,,,/Assets/app.ico", UriKind.Absolute);
+        window.Icon = BitmapFrame.Create(WindowIconUri);
     }
 }
