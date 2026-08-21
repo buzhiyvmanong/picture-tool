@@ -1,6 +1,17 @@
-# Changelog
+﻿# Changelog
 
 All notable changes to PictureTool are documented in this file.
+
+## [2.0.0] - 2026-08-21
+
+### Fixed
+- Auto-scroll no longer repeatedly stitches the same viewport when the page cannot advance
+- Full-frame similarity detection stops capture when scrolling produces no real movement
+- Auto-scroll falls back to real mouse-wheel input after synthetic PostMessage fails
+- Reject false large advances caused by overlap search latching onto near-identical frames
+
+### Changed
+- Auto-scroll matching is stricter (no loose ControlledScroll "Added" path)
 
 ## [1.0.7] - 2026-08-20
 
@@ -62,3 +73,4 @@ All notable changes to PictureTool are documented in this file.
 - Area capture, scroll capture, annotation, pin-to-screen
 - OCR text extraction, capture history
 - Global hotkeys and system tray integration
+

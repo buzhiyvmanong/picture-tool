@@ -49,6 +49,18 @@ public class ScrollCaptureLogicTests
     }
 
     [Fact]
+    public void OverlapMatch_IsSameFrame_WhenAllOverlapsLookIdentical()
+    {
+        // Identical frames score ~0 at every overlap candidate; even if search picked a small overlap,
+        // AlternateScore also being near-zero means the viewport did not move.
+        var match = new ScrollCaptureService.OverlapMatch(
+            Overlap: 120, Score: 0.4, AlternateScore: 0.6, MinimumOverlap: 48, FrameHeight: 500);
+
+        Assert.True(match.IsSameFrame);
+        Assert.False(match.IsUsableForControlledScroll);
+    }
+
+    [Fact]
     public void OverlapMatch_NotSameFrame_WhenScoreHigh()
     {
         var match = new ScrollCaptureService.OverlapMatch(
@@ -64,6 +76,57 @@ public class ScrollCaptureLogicTests
             Overlap: 100, Score: 1.0, AlternateScore: 50.0, MinimumOverlap: 48, FrameHeight: 500);
 
         Assert.False(match.IsSameFrame);
+    }
+
+    [Fact]
+    public void OverlapMatch_NotUsableForControlledScroll_NearFullOverlap()
+    {
+        var match = new ScrollCaptureService.OverlapMatch(
+            Overlap: 490, Score: 8.0, AlternateScore: 20.0, MinimumOverlap: 48, FrameHeight: 500);
+
+        Assert.False(match.IsUsableForControlledScroll);
+    }
+
+    [Fact]
+    public void FindBestOverlap_IdenticalFrames_PrefersNearFullOverlap()
+    {
+        using var previous = CreateSolidBitmap(200, 400, 40, 80, 120);
+        using var current = new System.Drawing.Bitmap(previous);
+
+        var match = ScrollCaptureService.FindBestOverlapForTests(previous, current);
+        var fullScore = ScrollCaptureService.CompareFullFrame(previous, current);
+
+        Assert.True(fullScore <= 6.0);
+        Assert.True(match.Score <= 2.0);
+        Assert.True(match.Overlap >= current.Height - 16);
+        Assert.True(match.IsSameFrame);
+        Assert.False(match.IsUsableForControlledScroll);
+    }
+
+    [Fact]
+    public void CompareFullFrame_IdenticalBitmaps_IsNearZero()
+    {
+        using var previous = CreateSolidBitmap(160, 320, 30, 60, 90);
+        using var current = new System.Drawing.Bitmap(previous);
+
+        Assert.True(ScrollCaptureService.CompareFullFrame(previous, current) <= 1.0);
+    }
+
+    [Fact]
+    public void CompareFullFrame_DifferentBitmaps_IsHigh()
+    {
+        using var previous = CreateSolidBitmap(160, 320, 10, 10, 10);
+        using var current = CreateSolidBitmap(160, 320, 200, 200, 200);
+
+        Assert.True(ScrollCaptureService.CompareFullFrame(previous, current) > 50);
+    }
+
+    private static System.Drawing.Bitmap CreateSolidBitmap(int width, int height, int r, int g, int b)
+    {
+        var bitmap = new System.Drawing.Bitmap(width, height, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+        using var graphics = System.Drawing.Graphics.FromImage(bitmap);
+        graphics.Clear(System.Drawing.Color.FromArgb(255, r, g, b));
+        return bitmap;
     }
 
     [Fact]

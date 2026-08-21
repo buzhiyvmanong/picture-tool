@@ -13,6 +13,7 @@ public sealed class ScrollCaptureService
     private const int ScrollDelayMs = 520;
     private const int MinOverlap = 48;
     private const int OverlapSearchStep = 8;
+    private const int MinMeaningfulAdvancePx = 16;
     private const double SameFrameScore = 2.0;
     private const double MatchScoreLimit = 16.0;
     private const double ControlledScrollMatchScoreLimit = 24.0;
@@ -20,6 +21,9 @@ public sealed class ScrollCaptureService
     private const double MinContinuousOverlapRatio = 0.24;
     private const double HighConfidenceOverlapRatio = 0.50;
     private const double AmbiguousScoreGap = 2.5;
+    private const double OverlapScoreTieEpsilon = 0.75;
+    private const double FullFrameUnchangedScore = 6.0;
+    private const double SuspiciousLargeAdvanceScore = 12.0;
 
     public CaptureSession StartSession(DrawingRectangle region, ScrollCaptureDirection direction = ScrollCaptureDirection.VerticalDown)
     {
@@ -250,52 +254,16 @@ public sealed class ScrollCaptureService
             _ => FindBestVerticalOverlap(previous, current)
         };
 
-    private static OverlapMatch FindBestVerticalOverlap(Bitmap previous, Bitmap current)
-    {
-        var height = Math.Min(previous.Height, current.Height);
-        var maxOverlap = Math.Max(1, height - 8);
-        var minOverlap = Math.Min(
-            Math.Max(MinOverlap, (int)Math.Round(height * MinContinuousOverlapRatio)),
-            maxOverlap);
-        var bestOverlap = 0;
-        var bestScore = double.MaxValue;
-        var candidates = new List<(int Overlap, double Score)>();
+    private static OverlapMatch FindBestVerticalOverlap(Bitmap previous, Bitmap current) =>
+        FindBestAxisOverlap(
+            Math.Min(previous.Height, current.Height),
+            overlap => CompareOverlap(previous, current, overlap));
 
-        for (var overlap = minOverlap; overlap <= maxOverlap; overlap += OverlapSearchStep)
-        {
-            var score = CompareOverlap(previous, current, overlap);
-            candidates.Add((overlap, score));
-            if (score < bestScore)
-            {
-                bestScore = score;
-                bestOverlap = overlap;
-            }
-        }
-
-        if (bestOverlap > 0)
-        {
-            var refineStart = Math.Max(minOverlap, bestOverlap - OverlapSearchStep);
-            var refineEnd = Math.Min(maxOverlap, bestOverlap + OverlapSearchStep);
-            for (var overlap = refineStart; overlap <= refineEnd; overlap++)
-            {
-                var score = CompareOverlap(previous, current, overlap);
-                if (score < bestScore)
-                {
-                    bestScore = score;
-                    bestOverlap = overlap;
-                }
-            }
-        }
-
-        var distinctDistance = Math.Max(OverlapSearchStep * 2, (int)Math.Round(height * 0.10));
-        var alternateScore = candidates
-            .Where(candidate => Math.Abs(candidate.Overlap - bestOverlap) >= distinctDistance)
-            .Select(candidate => candidate.Score)
-            .DefaultIfEmpty(double.MaxValue)
-            .Min();
-
-        return new OverlapMatch(bestOverlap, bestScore, alternateScore, minOverlap, height);
-    }
+    internal static OverlapMatch FindBestOverlapForTests(
+        Bitmap previous,
+        Bitmap current,
+        ScrollCaptureDirection direction = ScrollCaptureDirection.VerticalDown) =>
+        FindBestOverlap(previous, current, direction);
 
     private static unsafe double CompareOverlap(Bitmap previous, Bitmap current, int overlap)
     {
@@ -353,6 +321,62 @@ public sealed class ScrollCaptureService
         return samples == 0 ? double.MaxValue : diff / (samples * 3.0);
     }
 
+    /// <summary>
+    /// Average per-channel difference across the whole frame. Used to detect "scroll did nothing"
+    /// even when overlap search falsely prefers a small overlap on near-identical images.
+    /// </summary>
+    internal static unsafe double CompareFullFrame(Bitmap previous, Bitmap current)
+    {
+        var width = Math.Min(previous.Width, current.Width);
+        var height = Math.Min(previous.Height, current.Height);
+        if (width <= 0 || height <= 0)
+        {
+            return double.MaxValue;
+        }
+
+        var rowSamples = Math.Clamp(height / 8, 24, 96);
+        var colSamples = Math.Clamp(width / 8, 24, 96);
+        long diff = 0;
+        var samples = 0;
+
+        var prevRect = new DrawingRectangle(0, 0, previous.Width, previous.Height);
+        var currRect = new DrawingRectangle(0, 0, current.Width, current.Height);
+        var prevData = previous.LockBits(prevRect, ImageLockMode.ReadOnly, PixelFormat.Format32bppPArgb);
+        var currData = current.LockBits(currRect, ImageLockMode.ReadOnly, PixelFormat.Format32bppPArgb);
+
+        try
+        {
+            var prevStride = prevData.Stride;
+            var currStride = currData.Stride;
+            var prevScan = (byte*)prevData.Scan0;
+            var currScan = (byte*)currData.Scan0;
+
+            for (var row = 0; row < rowSamples; row++)
+            {
+                var y = Math.Clamp((int)Math.Floor((row + 0.5) * height / rowSamples), 0, height - 1);
+                var prevRow = prevScan + y * prevStride;
+                var currRow = currScan + y * currStride;
+
+                for (var col = 0; col < colSamples; col++)
+                {
+                    var x = Math.Clamp((int)Math.Floor((col + 0.5) * width / colSamples), 0, width - 1);
+                    var offset = x * 4;
+                    diff += Math.Abs(prevRow[offset] - currRow[offset]);
+                    diff += Math.Abs(prevRow[offset + 1] - currRow[offset + 1]);
+                    diff += Math.Abs(prevRow[offset + 2] - currRow[offset + 2]);
+                    samples++;
+                }
+            }
+        }
+        finally
+        {
+            previous.UnlockBits(prevData);
+            current.UnlockBits(currData);
+        }
+
+        return samples == 0 ? double.MaxValue : diff / (samples * 3.0);
+    }
+
     private static OverlapMatch FindBestVerticalOverlapUp(Bitmap previous, Bitmap current) =>
         FindBestAxisOverlap(
             Math.Min(previous.Height, current.Height),
@@ -382,11 +406,7 @@ public sealed class ScrollCaptureService
         {
             var score = scoreForOverlap(overlap);
             candidates.Add((overlap, score));
-            if (score < bestScore)
-            {
-                bestScore = score;
-                bestOverlap = overlap;
-            }
+            ConsiderOverlapCandidate(overlap, score, ref bestOverlap, ref bestScore);
         }
 
         if (bestOverlap > 0)
@@ -396,11 +416,15 @@ public sealed class ScrollCaptureService
             for (var overlap = refineStart; overlap <= refineEnd; overlap++)
             {
                 var score = scoreForOverlap(overlap);
-                if (score < bestScore)
-                {
-                    bestScore = score;
-                    bestOverlap = overlap;
-                }
+                ConsiderOverlapCandidate(overlap, score, ref bestOverlap, ref bestScore);
+            }
+
+            // Identical frames score ~0 at every overlap; prefer the largest usable overlap
+            // so IsSameFrame can recognize "no movement" instead of treating minOverlap as new content.
+            if (bestScore <= SameFrameScore)
+            {
+                var nearFull = scoreForOverlap(maxOverlap);
+                ConsiderOverlapCandidate(maxOverlap, nearFull, ref bestOverlap, ref bestScore);
             }
         }
 
@@ -412,6 +436,26 @@ public sealed class ScrollCaptureService
             .Min();
 
         return new OverlapMatch(bestOverlap, bestScore, alternateScore, minOverlap, span);
+    }
+
+    private static void ConsiderOverlapCandidate(
+        int overlap,
+        double score,
+        ref int bestOverlap,
+        ref double bestScore)
+    {
+        if (score < bestScore - OverlapScoreTieEpsilon)
+        {
+            bestScore = score;
+            bestOverlap = overlap;
+            return;
+        }
+
+        if (score <= bestScore + OverlapScoreTieEpsilon && overlap > bestOverlap)
+        {
+            bestOverlap = overlap;
+            bestScore = Math.Min(bestScore, score);
+        }
     }
 
     private static unsafe double CompareOverlapUp(Bitmap previous, Bitmap current, int overlap)
@@ -574,21 +618,23 @@ public sealed class ScrollCaptureService
         DrawingRectangle region,
         int wheelDelta,
         ScrollCaptureDirection direction,
-        DrawingPoint? scrollPoint = null)
+        DrawingPoint? scrollPoint = null,
+        bool forceRealInput = false)
     {
         if (direction.IsHorizontal())
         {
-            ScrollHorizontalWheel(region, wheelDelta, scrollPoint);
+            ScrollHorizontalWheel(region, wheelDelta, scrollPoint, forceRealInput);
             return;
         }
 
-        ScrollVerticalWheel(region, wheelDelta, scrollPoint);
+        ScrollVerticalWheel(region, wheelDelta, scrollPoint, forceRealInput);
     }
 
     private static void ScrollVerticalWheel(
         DrawingRectangle region,
         int wheelDelta,
-        DrawingPoint? scrollPoint = null)
+        DrawingPoint? scrollPoint = null,
+        bool forceRealInput = false)
     {
         var x = scrollPoint?.X ?? region.Left + region.Width / 2;
         var y = scrollPoint?.Y ?? region.Top + region.Height / 2;
@@ -596,6 +642,13 @@ public sealed class ScrollCaptureService
         x = Math.Clamp(x, region.Left, region.Right - 1);
         y = Math.Clamp(y, region.Top, region.Bottom - 1);
         SetCursorPos(x, y);
+
+        if (forceRealInput)
+        {
+            Thread.Sleep(60);
+            mouse_event(MouseEventWheel, 0, 0, wheelDelta, UIntPtr.Zero);
+            return;
+        }
 
         var targets = FindWheelTargets(x, y);
         if (targets.Count > 0)
@@ -615,13 +668,21 @@ public sealed class ScrollCaptureService
     private static void ScrollHorizontalWheel(
         DrawingRectangle region,
         int wheelDelta,
-        DrawingPoint? scrollPoint = null)
+        DrawingPoint? scrollPoint = null,
+        bool forceRealInput = false)
     {
         var x = scrollPoint?.X ?? region.Left + region.Width / 2;
         var y = scrollPoint?.Y ?? region.Top + region.Height / 2;
         x = Math.Clamp(x, region.Left, region.Right - 1);
         y = Math.Clamp(y, region.Top, region.Bottom - 1);
         SetCursorPos(x, y);
+
+        if (forceRealInput)
+        {
+            Thread.Sleep(60);
+            mouse_event(MouseEventHWheel, 0, 0, wheelDelta, UIntPtr.Zero);
+            return;
+        }
 
         var targets = FindWheelTargets(x, y);
         if (targets.Count > 0)
@@ -831,7 +892,9 @@ public sealed class ScrollCaptureService
 
         public CaptureStepResult CaptureCurrentForAuto(bool createPreview = true)
         {
-            return CaptureCurrent(createPreview, useControlledScrollMatching: true, countUnmatchedStep: false);
+            // Auto mode must not use the loose ControlledScroll "Added" path — that is what
+            // turned stalled near-identical frames into duplicated strips.
+            return CaptureCurrent(createPreview, useControlledScrollMatching: false, countUnmatchedStep: false);
         }
 
         private CaptureStepResult CaptureCurrent(
@@ -857,11 +920,29 @@ public sealed class ScrollCaptureService
                 int currentSpan;
                 using (var current = new Bitmap(currentPath))
                 {
+                    var fullFrameScore = CompareFullFrame(_previousHolder.Bitmap, current);
+                    if (fullFrameScore <= FullFrameUnchangedScore)
+                    {
+                        TempImageStore.TryDelete(currentPath);
+                        _unmatchedSteps = 0;
+                        return CaptureStepResult.Unchanged(FrameCount);
+                    }
+
                     var match = FindBestOverlap(_previousHolder.Bitmap, current, _direction);
                     overlap = match.Overlap;
                     currentSpan = _direction.IsHorizontal() ? current.Width : current.Height;
+                    var advance = currentSpan - overlap;
 
                     if (match.IsSameFrame)
+                    {
+                        TempImageStore.TryDelete(currentPath);
+                        _unmatchedSteps = 0;
+                        return CaptureStepResult.Unchanged(FrameCount);
+                    }
+
+                    // Claiming a large advance while the whole viewport still looks similar means
+                    // overlap search latched onto a false small overlap (common on chat UIs).
+                    if (advance >= currentSpan * 0.35 && fullFrameScore <= SuspiciousLargeAdvanceScore)
                     {
                         TempImageStore.TryDelete(currentPath);
                         _unmatchedSteps = 0;
@@ -874,7 +955,7 @@ public sealed class ScrollCaptureService
                     }
                 }
 
-                if (overlap >= currentSpan - 8)
+                if (overlap >= currentSpan - MinMeaningfulAdvancePx)
                 {
                     TempImageStore.TryDelete(currentPath);
                     _unmatchedSteps = 0;
@@ -903,9 +984,25 @@ public sealed class ScrollCaptureService
         {
             ThrowIfFinished();
 
-            ScrollWheel(_region, wheelDelta, _direction);
+            var delta = wheelDelta == 0 ? _direction.GetAutoWheelDelta() : wheelDelta;
+
+            // 1) Synthetic PostMessage scroll (works for many Win32 targets)
+            ScrollWheel(_region, delta, _direction, forceRealInput: false);
             Thread.Sleep(Math.Max(0, delayMs));
-            return CaptureCurrentForAuto(createPreview);
+            var first = CaptureCurrentForAuto(createPreview: false);
+            if (first.Status == CaptureStepStatus.Added)
+            {
+                return createPreview
+                    ? CaptureStepResult.Added(CreatePreview(), FrameCount)
+                    : first;
+            }
+
+            // 2) Unchanged/Indeterminate after synthetic scroll: try a real mouse wheel once
+            //    before deciding we truly cannot advance (otherwise nested scrollers never reach bottom).
+            ScrollWheel(_region, delta, _direction, forceRealInput: true);
+            Thread.Sleep(Math.Max(delayMs / 2, 500));
+            var second = CaptureCurrentForAuto(createPreview);
+            return second;
         }
 
         public CaptureStepResult CaptureManualStep(bool createPreview = true)
@@ -1022,7 +1119,10 @@ public sealed class ScrollCaptureService
 
     internal sealed record OverlapMatch(int Overlap, double Score, double AlternateScore, int MinimumOverlap, int FrameHeight)
     {
-        public bool IsSameFrame => Score <= SameFrameScore && Overlap >= FrameHeight - 12;
+        public bool IsSameFrame =>
+            Score <= SameFrameScore
+            && (Overlap >= FrameHeight - MinMeaningfulAdvancePx
+                || AlternateScore <= SameFrameScore + OverlapScoreTieEpsilon);
 
         public bool IsReliable =>
             Overlap >= MinimumOverlap
@@ -1032,7 +1132,9 @@ public sealed class ScrollCaptureService
 
         public bool IsUsableForControlledScroll =>
             Overlap >= MinimumOverlap
-            && Score <= ControlledScrollMatchScoreLimit;
+            && Overlap < FrameHeight - MinMeaningfulAdvancePx
+            && Score <= ControlledScrollMatchScoreLimit
+            && !IsSameFrame;
     }
 
     public sealed record CaptureStepResult(CaptureStepStatus Status, string? PreviewPath, int FrameCount)
